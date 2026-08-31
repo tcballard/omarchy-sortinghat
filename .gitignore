@@ -1,0 +1,8 @@
+/target/
+/dist/
+/artifacts/
+/.cache/
+*.tmp
+*.partial
+*.profraw
+.DS_Store
