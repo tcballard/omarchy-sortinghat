@@ -16,3 +16,11 @@ Append-only verification evidence for `feat/machine-independent-v0.1`.
 - `cargo clippy --workspace --all-targets -- -D warnings`: passed.
 - `cargo fmt --all -- --check`: passed.
 - Daemon CLI smoke test: blocked. This execution sandbox returned `EPERM` while creating the Unix socket; no live daemon claim is made.
+
+## 2026-08-31 — Omarchy surface and packaging
+
+- Pinned upstream `omarchy-plugin-validate`: passed; verified validator SHA-256 before execution.
+- Pinned upstream `qml-text-format-scan.py`: passed.
+- `cargo test --workspace --locked`: passed, 15 unit tests plus doc tests.
+- `systemd-analyze --user verify`: blocked because this container has no user manager/runtime directory. System-level parse reached only the expected missing uninstalled binary check.
+- Live Omarchy UI/keyboard acceptance: not run; capture harness added and gate remains explicit.

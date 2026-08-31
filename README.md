@@ -11,3 +11,5 @@ This is a native Rust service with a thin Omarchy QML surface. It complements th
 v0.1 is under active development on `feat/machine-independent-v0.1`. Live Omarchy acceptance is a required, separate gate and has not been claimed.
 
 See [SPEC.md](SPEC.md), [ADR 0001](docs/adr/0001-safety-architecture.md), and the [initial audit](docs/audit/initial-audit.md).
+
+Installation and CLI usage are in [docs/install.md](docs/install.md). Privacy boundaries are in [docs/privacy.md](docs/privacy.md). Live Omarchy acceptance remains [explicitly unclaimed](docs/live-acceptance.md) until captured on Quattro.

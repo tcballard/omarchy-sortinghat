@@ -124,7 +124,8 @@ fn dispatch(service: &mut Service, request: &Request) -> Result<Response, Servic
             service
                 .proposals()
                 .iter()
-                .filter(|proposal| proposal.status == "proposed")
+                .filter(|proposal| proposal.status != "ignored" && proposal.status != "undone")
+                .rev()
                 .take(100)
                 .collect::<Vec<_>>()
         ),
@@ -138,6 +139,19 @@ fn dispatch(service: &mut Service, request: &Request) -> Result<Response, Servic
                 &arg.directory
             )?)
         }
+        "proposal_choose_folder" => json!(
+            service.choose_destination_path(
+                id(request)?,
+                revision(request)?,
+                PathBuf::from(
+                    request
+                        .argument
+                        .as_deref()
+                        .ok_or(ServiceError::MalformedState)?
+                )
+                .as_path(),
+            )?
+        ),
         "proposal_rename" => json!(
             service.rename(
                 id(request)?,

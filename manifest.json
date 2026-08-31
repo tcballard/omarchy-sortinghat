@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "tcballard.sortinghat",
+  "name": "SortingHat",
+  "version": "0.1.0",
+  "author": "Tom Ballard",
+  "description": "Review-first file organisation for Omarchy",
+  "kinds": ["service", "bar-widget"],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "omarchy-plugin/SortingHatService.qml",
+    "barWidget": "omarchy-plugin/SortingHatWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "SortingHat",
+    "description": "Files awaiting organisation review",
+    "category": "System",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}
