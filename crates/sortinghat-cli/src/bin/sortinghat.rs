@@ -40,6 +40,10 @@ enum Command {
         #[command(subcommand)]
         command: RuleCommand,
     },
+    Agent {
+        #[command(subcommand)]
+        command: AgentCommand,
+    },
     Undo(RevisionArgs),
 }
 
@@ -108,6 +112,17 @@ enum RuleCommand {
         #[arg(long, default_value_t = 100)]
         priority: i32,
     },
+}
+
+#[derive(Subcommand)]
+enum AgentCommand {
+    Status,
+    Enable {
+        executable: String,
+        #[arg(long = "arg", action = clap::ArgAction::Append)]
+        fixed_args: Vec<String>,
+    },
+    Disable,
 }
 
 fn main() {
@@ -204,6 +219,22 @@ fn command_request(command: Command) -> (String, Option<Uuid>, Option<u64>, Opti
                 None,
                 Some(priority.to_string()),
             ),
+        },
+        Command::Agent { command } => match command {
+            AgentCommand::Status => plain("agent_status"),
+            AgentCommand::Enable {
+                executable,
+                fixed_args,
+            } => (
+                "agent_enable".into(),
+                None,
+                None,
+                Some(
+                    serde_json::json!({"executable": executable, "fixed_args": fixed_args})
+                        .to_string(),
+                ),
+            ),
+            AgentCommand::Disable => plain("agent_disable"),
         },
         Command::Undo(args) => revision_request("undo", args),
     }

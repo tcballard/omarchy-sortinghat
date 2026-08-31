@@ -9,7 +9,7 @@ One Rust daemon is the sole owner of watched-file mutations and the SQLite journ
 
 Roots are explicit capabilities: retain `O_PATH|O_DIRECTORY` descriptors and identities, resolve descendants with `openat2(RESOLVE_BENEATH|RESOLVE_NO_SYMLINKS|RESOLVE_NO_MAGICLINKS|RESOLVE_NO_XDEV)`, and perform mutations through parent FDs plus raw-byte basenames. `canonicalize()`/prefix checks are display validation only.
 
-Inotify starts settling but cannot prove completion. Stable repeated identity/size/time observations, bounded FD-based MIME/hash inspection, and approval-time revalidation bind every proposal.
+Bounded polling is the v0.1 watcher because it gives deterministic overflow behavior and portable temporary-tree tests. Discovery cannot prove completion: stable repeated identity/size/time observations, bounded FD-based MIME/hash inspection, and approval-time revalidation bind every proposal. A future inotify accelerator is only a hint and must fall back to the same bounded scan after overflow.
 
 Rules are typed and pure. All highest-priority matches are considered; one normalised outcome decides, different outcomes tie, and no match abstains. Agent classification is disabled by default, metadata-first, single-flight, direct-argv, bounded/cancellable, and returns a registered destination ID or abstains.
 
@@ -19,7 +19,7 @@ Undo repeats the same confined no-overwrite protocol. Queue/journal caps pause m
 
 ## Consequences
 
-Linux `openat2`, `statx`, `renameat2`, inotify and SQLite are baseline requirements. Unsupported kernels/filesystems fail closed. Descriptor-relative raw-byte handling is more complex, but prevents symlink, mount and path-replacement races that the macOS reference does not address.
+Linux `openat2`, `statx`, `renameat2` and SQLite are baseline requirements. Unsupported kernels/filesystems fail closed. Polling trades some latency for deterministic recovery and no event-queue loss. Descriptor-relative raw-byte handling is more complex, but prevents symlink, mount and path-replacement races that the macOS reference does not address.
 
 ## Rejected
 

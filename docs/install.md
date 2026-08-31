@@ -41,5 +41,14 @@ sortinghat --json pause
 sortinghat --json resume
 ```
 
-Re-read a proposal after any action: successful edits increment its revision and stale approvals are rejected.
+Optional agent classification remains off until explicitly enabled. It receives only bounded metadata and cannot move a file:
 
+```bash
+sortinghat --json agent status
+sortinghat --json agent enable /absolute/path/to/local-adapter --arg fixed-argument
+sortinghat --json agent disable
+```
+
+There is no content permission in v0.1; enabling metadata classification does not grant one.
+
+Re-read a proposal after any action: successful edits increment its revision and stale approvals are rejected.

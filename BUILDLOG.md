@@ -34,3 +34,11 @@ Append-only verification evidence for `feat/machine-independent-v0.1`.
 - Extracted plugin: official pinned validator and dynamic-text scan passed.
 - `cargo-deny 0.20.2 check`: advisories, bans, licences and sources passed with an explicit Linux-target policy.
 - `scripts/verify.sh`: passed end to end, including format, Clippy, tests, locked metadata, dependency policy, official validator, QML scan and bounded secret-pattern scan.
+
+## 2026-08-31 — descriptor-relative mutation and agent opt-in
+
+- `cargo test --workspace --locked`: passed, 21 unit tests plus doc tests.
+- `cargo clippy --workspace --all-targets --locked -- -D warnings`: passed.
+- Added descriptor-relative same-filesystem rename, staged publication, verified source retirement and undo tests.
+- Added restart interruption, hardlink, oversized sparse file and case-folding coverage.
+- Agent is disabled by default, metadata-only when explicitly configured, 30-second bounded, destination-constrained and incapable of content access or mutation.

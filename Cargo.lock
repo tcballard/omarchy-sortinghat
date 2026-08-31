@@ -625,6 +625,7 @@ dependencies = [
  "rustix",
  "serde",
  "serde_json",
+ "sortinghat-agent",
  "sortinghat-core",
  "sortinghat-fs",
  "sortinghat-journal",
