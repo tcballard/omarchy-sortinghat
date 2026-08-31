@@ -18,8 +18,8 @@ path = "src/bin/sortinghatd.rs"
 clap.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-sortinghat-core = { path = "../sortinghat-core" }
-sortinghat-service = { path = "../sortinghat-service" }
+sortinghat-core = { path = "../sortinghat-core", version = "=0.1.0" }
+sortinghat-service = { path = "../sortinghat-service", version = "=0.1.0" }
 thiserror.workspace = true
 uuid.workspace = true
 rustix.workspace = true

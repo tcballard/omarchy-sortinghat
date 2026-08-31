@@ -19,3 +19,7 @@ The service uses `openat2` confinement and identity revalidation before approval
 Added the Quattro schemaVersion 1 service/bar-widget manifest, a bounded non-overlapping QML poller, review popup, folder settings, review actions, honest missing/paused/error states, keyboard focus targets, a no-IP-network user unit, reproducible committed-object packager, pinned upstream verification and a live capture gate. QML uses fixed argv arrays and plain-text rendering for untrusted values.
 
 QML was statically validated but not loaded in a live Quickshell session. The host lacks a user systemd manager and rejects Unix sockets, so those two runtime integrations remain explicit acceptance gates.
+
+## 2026-08-31 — exact-object and dependency assurance
+
+The release archive was built from `git archive`, not the working tree, and then cleanly extracted and revalidated. Dependency policy now pins accepted registries, rejects wildcard requirements, scans RustSec advisories, and allows only the licences actually encountered on supported Linux targets. Generated archives remain untracked and no release was published.
