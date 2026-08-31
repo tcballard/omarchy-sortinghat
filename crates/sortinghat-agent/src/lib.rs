@@ -142,10 +142,7 @@ mod tests {
             source_root_id: Uuid::nil(),
             allowed_destination_ids: vec![],
         };
-        let adapter = Adapter::local(
-            "/bin/sh".into(),
-            vec!["-c".into(), "printf not-json".into()],
-        );
+        let adapter = Adapter::local("/bin/cat".into(), vec![]);
         assert!(matches!(
             adapter.classify(&request),
             Err(AgentError::Malformed)

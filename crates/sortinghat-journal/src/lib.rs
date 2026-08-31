@@ -208,6 +208,64 @@ impl Journal {
         self.get(id)
     }
 
+    pub fn revise_proposal(
+        &mut self,
+        id: Uuid,
+        revision: u64,
+        destination_token: &[u8],
+    ) -> Result<Entry, JournalError> {
+        let current = self.get(id)?;
+        if current.revision != revision {
+            return Err(JournalError::RevisionConflict);
+        }
+        if current.state != State::Proposed {
+            return Err(JournalError::InvalidTransition);
+        }
+        let revision_sql = i64::try_from(revision).map_err(|_| JournalError::Range)?;
+        let next = revision.checked_add(1).ok_or(JournalError::Range)?;
+        let next_sql = i64::try_from(next).map_err(|_| JournalError::Range)?;
+        let changed = self.connection.execute(
+            "UPDATE entries SET destination_token=?1, revision=?2, updated_at=unixepoch()
+             WHERE id=?3 AND revision=?4 AND state='proposed'",
+            params![destination_token, next_sql, id.to_string(), revision_sql],
+        )?;
+        if changed != 1 {
+            return Err(JournalError::RevisionConflict);
+        }
+        self.get(id)
+    }
+
+    pub fn set_sha256(&mut self, id: Uuid, sha256: &str) -> Result<(), JournalError> {
+        if sha256.len() != 64 || !sha256.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return Err(JournalError::CorruptState);
+        }
+        if self.connection.execute(
+            "UPDATE entries SET sha256=?1, updated_at=unixepoch() WHERE id=?2",
+            params![sha256, id.to_string()],
+        )? != 1
+        {
+            return Err(JournalError::NotFound);
+        }
+        Ok(())
+    }
+
+    pub fn nonterminal(&self) -> Result<Vec<Entry>, JournalError> {
+        let mut statement = self.connection.prepare(
+            "SELECT id FROM entries WHERE state NOT IN ('completed','undone','failed_safely','ignored')
+             ORDER BY updated_at, rowid LIMIT 1000",
+        )?;
+        let ids = statement
+            .query_map([], |row| row.get::<_, String>(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+        ids.into_iter()
+            .map(|id| {
+                Uuid::parse_str(&id)
+                    .map_err(|_| JournalError::CorruptState)
+                    .and_then(|id| self.get(id))
+            })
+            .collect()
+    }
+
     fn active_count(&self) -> Result<i64, JournalError> {
         Ok(self.connection.query_row(
             "SELECT count(*) FROM entries WHERE state NOT IN ('completed','undone','failed_safely','ignored')",

@@ -1,9 +1,11 @@
 //! Linux filesystem primitives. Callers must journal durable intent before mutation.
 
-use rustix::fs::{AtFlags, RenameFlags, renameat_with, statat};
+use rustix::fd::OwnedFd;
+use rustix::fs::{Mode, OFlags, RenameFlags, ResolveFlags, open, openat2, renameat_with};
 use sha2::{Digest, Sha256};
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, BufReader, BufWriter, Read, Write};
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Component, Path, PathBuf};
 use std::time::{Duration, SystemTime};
@@ -74,7 +76,10 @@ impl StabilityTracker {
 }
 
 pub fn validate_relative(path: &Path) -> Result<(), FsError> {
-    if path.as_os_str().is_empty() || path.as_os_str().len() > 4_096 || path.is_absolute() {
+    if path.as_os_str().is_empty()
+        || path.as_os_str().as_bytes().len() > 4_096
+        || path.is_absolute()
+    {
         return Err(FsError::UnsafePath);
     }
     for component in path.components() {
@@ -83,6 +88,30 @@ pub fn validate_relative(path: &Path) -> Result<(), FsError> {
         }
     }
     Ok(())
+}
+
+pub fn open_root(root: &Path) -> Result<OwnedFd, FsError> {
+    open(
+        root,
+        OFlags::PATH | OFlags::DIRECTORY | OFlags::CLOEXEC,
+        Mode::empty(),
+    )
+    .map_err(|error| FsError::Io(io::Error::from_raw_os_error(error.raw_os_error())))
+}
+
+pub fn open_beneath(root: &OwnedFd, relative: &Path, flags: OFlags) -> Result<OwnedFd, FsError> {
+    validate_relative(relative)?;
+    openat2(
+        root,
+        relative,
+        flags | OFlags::CLOEXEC | OFlags::NOFOLLOW,
+        Mode::empty(),
+        ResolveFlags::BENEATH
+            | ResolveFlags::NO_SYMLINKS
+            | ResolveFlags::NO_MAGICLINKS
+            | ResolveFlags::NO_XDEV,
+    )
+    .map_err(|error| FsError::Io(io::Error::from_raw_os_error(error.raw_os_error())))
 }
 
 pub fn validate_beneath(root: &Path, relative: &Path) -> Result<PathBuf, FsError> {
@@ -236,9 +265,20 @@ pub fn destination_exists_case_folded(destination: &Path) -> Result<bool, FsErro
 }
 
 pub fn path_is_symlink(path: &Path) -> Result<bool, FsError> {
-    let stat = statat(rustix::fs::CWD, path, AtFlags::SYMLINK_NOFOLLOW)
-        .map_err(|e| FsError::Io(io::Error::from_raw_os_error(e.raw_os_error())))?;
-    Ok((stat.st_mode & rustix::fs::FileType::Symlink.as_raw_mode()) != 0)
+    Ok(fs::symlink_metadata(path)?.file_type().is_symlink())
+}
+
+pub fn retire_source(
+    source: &Path,
+    expected: Identity,
+    expected_sha256: &str,
+) -> Result<(), FsError> {
+    if Identity::read(source)? != expected || sha256(source)? != expected_sha256 {
+        return Err(FsError::IdentityChanged);
+    }
+    fs::remove_file(source)?;
+    File::open(source.parent().ok_or(FsError::UnsafePath)?)?.sync_all()?;
+    Ok(())
 }
 
 #[cfg(test)]
