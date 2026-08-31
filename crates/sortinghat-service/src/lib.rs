@@ -301,6 +301,44 @@ impl Service {
         Ok(result)
     }
 
+    pub fn choose_destination_path(
+        &mut self,
+        id: Uuid,
+        revision: u64,
+        folder: &Path,
+    ) -> Result<Proposal, ServiceError> {
+        let metadata = fs::symlink_metadata(folder)?;
+        if !metadata.is_dir() || metadata.file_type().is_symlink() {
+            return Err(ServiceError::UnsafePath);
+        }
+        let canonical = folder.canonicalize()?;
+        let mut candidates = self
+            .state
+            .roots
+            .iter()
+            .filter(|root| root.destination && canonical.starts_with(&root.path))
+            .cloned()
+            .collect::<Vec<_>>();
+        candidates.sort_by_key(|root| std::cmp::Reverse(root.path.len()));
+        let root = if let Some(root) = candidates.into_iter().next() {
+            root
+        } else {
+            self.add_root(&canonical, false, true)?
+        };
+        let relative = canonical
+            .strip_prefix(&root.path)
+            .map_err(|_| ServiceError::UnsafePath)?;
+        let directory = if relative.as_os_str().is_empty() {
+            ".".to_owned()
+        } else {
+            relative
+                .to_str()
+                .ok_or(ServiceError::UnsafePath)?
+                .to_owned()
+        };
+        self.choose_destination(id, revision, root.id, &directory)
+    }
+
     pub fn rename(
         &mut self,
         id: Uuid,
@@ -417,11 +455,15 @@ impl Service {
             return Err(ServiceError::UnsafePath);
         }
         let destination_root_fd = open_root(Path::new(&destination_root.path))?;
-        let _destination_folder_fd = open_beneath(
-            &destination_root_fd,
-            Path::new(&choice.directory),
-            rustix::fs::OFlags::PATH | rustix::fs::OFlags::DIRECTORY,
-        )?;
+        let _destination_folder_fd = if choice.directory == "." {
+            None
+        } else {
+            Some(open_beneath(
+                &destination_root_fd,
+                Path::new(&choice.directory),
+                rustix::fs::OFlags::PATH | rustix::fs::OFlags::DIRECTORY,
+            )?)
+        };
         let destination = folder.join(
             proposal
                 .destination_name

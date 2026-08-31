@@ -85,6 +85,12 @@ enum ProposalCommand {
         #[arg(long)]
         revision: u64,
     },
+    ChooseFolder {
+        id: Uuid,
+        folder: PathBuf,
+        #[arg(long)]
+        revision: u64,
+    },
     Rename {
         id: Uuid,
         name: String,
@@ -172,6 +178,16 @@ fn command_request(command: Command) -> (String, Option<Uuid>, Option<u64>, Opti
                 Some(id),
                 Some(revision),
                 Some(serde_json::json!({"root_id": root, "directory": folder}).to_string()),
+            ),
+            ProposalCommand::ChooseFolder {
+                id,
+                folder,
+                revision,
+            } => (
+                "proposal_choose_folder".into(),
+                Some(id),
+                Some(revision),
+                folder.to_str().map(str::to_owned),
             ),
             ProposalCommand::Rename { id, name, revision } => (
                 "proposal_rename".into(),

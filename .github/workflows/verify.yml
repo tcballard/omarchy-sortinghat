@@ -1,0 +1,23 @@
+name: verify
+
+on:
+  push:
+    branches: [feat/machine-independent-v0.1]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  machine-independent:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component clippy,rustfmt
+      - name: Verify
+        env:
+          CARGO: cargo
+        run: ./scripts/verify.sh

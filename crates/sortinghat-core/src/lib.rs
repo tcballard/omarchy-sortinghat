@@ -143,6 +143,9 @@ fn validate_rule(rule: &Rule) -> Result<(), RuleError> {
 }
 
 pub fn validate_relative_directory(value: &str) -> Result<(), RuleError> {
+    if value == "." {
+        return Ok(());
+    }
     if value.len() > 4_096
         || value.starts_with('/')
         || value
