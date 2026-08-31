@@ -24,3 +24,13 @@ Append-only verification evidence for `feat/machine-independent-v0.1`.
 - `cargo test --workspace --locked`: passed, 15 unit tests plus doc tests.
 - `systemd-analyze --user verify`: blocked because this container has no user manager/runtime directory. System-level parse reached only the expected missing uninstalled binary check.
 - Live Omarchy UI/keyboard acceptance: not run; capture harness added and gate remains explicit.
+
+## 2026-08-31 — exact-object and dependency assurance
+
+- Source object: `2c1b56a22c403a14033cb93251a2a31e82094c7a`.
+- Reproducible release archive SHA-256: `73ad5a4f8265d1f6032c04af5c2040e9fbcc63180788399c670383d912966a48`.
+- Clean extraction `SOURCE_COMMIT`: matched the source object.
+- Extracted binaries: `sortinghat-cli 0.1.0`; daemon help executed.
+- Extracted plugin: official pinned validator and dynamic-text scan passed.
+- `cargo-deny 0.20.2 check`: advisories, bans, licences and sources passed with an explicit Linux-target policy.
+- `scripts/verify.sh`: passed end to end, including format, Clippy, tests, locked metadata, dependency policy, official validator, QML scan and bounded secret-pattern scan.

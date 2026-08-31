@@ -13,6 +13,7 @@ cd "$repo_root"
 "$cargo_bin" clippy --workspace --all-targets --locked -- -D warnings
 "$cargo_bin" test --workspace --locked
 "$cargo_bin" metadata --locked --format-version 1 >/dev/null
+cargo-deny check
 
 curl --fail --silent --show-error --location \
   "https://raw.githubusercontent.com/omacom/omarchy/$quattro_sha/bin/omarchy-plugin-validate" \
@@ -33,4 +34,3 @@ if rg -n --hidden --glob '!Cargo.lock' --glob '!.git/**' \
   printf 'potential secret detected\n' >&2
   exit 1
 fi
-
