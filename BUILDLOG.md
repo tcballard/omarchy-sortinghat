@@ -49,3 +49,12 @@ Append-only verification evidence for `feat/machine-independent-v0.1`.
 - `cargo clippy --workspace --all-targets --locked -- -D warnings`: passed.
 - Restart after `source_removed` advances to `completed` only when the source is absent and the destination matches recorded identity/size/checksum evidence.
 - All other interrupted mutation states preserve copies and enter `needs_attention` with a coarse evidence summary.
+
+## 2026-08-31 — bounded protocol and retention gates
+
+- `scripts/verify.sh`: passed end to end with 28 unit tests plus doc tests.
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`: passed.
+- `cargo-deny 0.20.2 check`: advisories, bans, licences and sources passed.
+- Pinned upstream manifest validator and dynamic QML text scan: passed.
+- Offline systemd security/parse analysis: passed; no live user manager claim is made.
+- Added strict request validation, queue/walk/journal bounds, terminal retention, recoverable uninstall, supported cross-filesystem mode/time preservation and duplicate-identity suppression.

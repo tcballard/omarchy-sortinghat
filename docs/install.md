@@ -52,3 +52,7 @@ sortinghat --json agent disable
 There is no content permission in v0.1; enabling metadata classification does not grant one.
 
 Re-read a proposal after any action: successful edits increment its revision and stale approvals are rejected.
+
+## Uninstall
+
+`./scripts/uninstall-user.sh` disables the unit and moves installed program files into a timestamped recovery folder. It does not delete SortingHat state, watched files or the Omarchy plugin. Remove the plugin separately through Omarchy after review.

@@ -27,6 +27,9 @@ const MAX_WALK_DIRECTORIES: usize = 25_000;
 const MAX_WALK_FILES: usize = 100_000;
 const MAX_WALK_DEPTH: usize = 32;
 const MAX_STATE_BYTES: u64 = 8 * 1024 * 1024;
+const MAX_JOURNAL_BYTES: u64 = 64 * 1024 * 1024;
+const MAX_TERMINAL_JOURNAL: usize = 10_000;
+const MAX_JOURNAL_AGE_SECONDS: u64 = 30 * 24 * 60 * 60;
 
 #[derive(Debug, Error)]
 pub enum ServiceError {
@@ -158,7 +161,11 @@ impl Service {
             journal,
             stability: HashMap::new(),
         };
-        service.journal.prune_terminal(10_000)?;
+        service.journal.enforce_retention(
+            MAX_TERMINAL_JOURNAL,
+            MAX_JOURNAL_AGE_SECONDS,
+            MAX_JOURNAL_BYTES,
+        )?;
         service.prune_terminal_proposals();
         service.recover_without_guessing()?;
         Ok(service)
@@ -458,7 +465,7 @@ impl Service {
         self.state.proposals[index].status = "ignored".into();
         let result = self.state.proposals[index].clone();
         self.prune_terminal_proposals();
-        self.journal.prune_terminal(10_000)?;
+        self.enforce_journal_retention()?;
         self.save()?;
         Ok(result)
     }
@@ -608,7 +615,7 @@ impl Service {
         self.state.proposals[index].status = "completed".into();
         let result = self.state.proposals[index].clone();
         self.prune_terminal_proposals();
-        self.journal.prune_terminal(10_000)?;
+        self.enforce_journal_retention()?;
         self.save()?;
         Ok(result)
     }
@@ -684,7 +691,7 @@ impl Service {
         self.state.proposals[index].status = "undone".into();
         let result = self.state.proposals[index].clone();
         self.prune_terminal_proposals();
-        self.journal.prune_terminal(10_000)?;
+        self.enforce_journal_retention()?;
         self.save()?;
         Ok(result)
     }
@@ -712,6 +719,14 @@ impl Service {
             return Ok(false);
         }
         let identity = Identity::read(&absolute)?;
+        if self.state.proposals.iter().any(|proposal| {
+            proposal.device == identity.device
+                && proposal.inode == identity.inode
+                && proposal.size == identity.size
+                && proposal.modified_ns == identity.modified_ns
+        }) {
+            return Ok(false);
+        }
         let mut facts = facts_for(relative, root.id, true);
         facts.verified_mime = sniff_mime(&absolute);
         let decision =
@@ -1014,6 +1029,15 @@ impl Service {
         });
     }
 
+    fn enforce_journal_retention(&mut self) -> Result<(), ServiceError> {
+        self.journal.enforce_retention(
+            MAX_TERMINAL_JOURNAL,
+            MAX_JOURNAL_AGE_SECONDS,
+            MAX_JOURNAL_BYTES,
+        )?;
+        Ok(())
+    }
+
     fn save(&self) -> Result<(), ServiceError> {
         let body =
             serde_json::to_vec_pretty(&self.state).map_err(|_| ServiceError::MalformedState)?;
@@ -1236,6 +1260,11 @@ mod tests {
         thread::sleep(Duration::from_millis(1_050));
         assert_eq!(service.scan_once().unwrap(), 1);
         assert_eq!(service.proposals().len(), 1);
+        let proposal = service.proposals()[0].clone();
+        service.ignore(proposal.id, proposal.revision).unwrap();
+        thread::sleep(Duration::from_millis(1_050));
+        assert_eq!(service.scan_once().unwrap(), 0);
+        assert_eq!(service.proposals().len(), 1);
     }
 
     #[test]
@@ -1377,5 +1406,34 @@ mod tests {
         assert_eq!(recovered.proposals()[0].status, "completed");
         assert!(destination.exists());
         assert!(!source.exists());
+    }
+
+    #[test]
+    fn full_active_queue_pauses_without_pruning() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut service = Service::open(&temp.path().join("state")).unwrap();
+        for _ in 0..MAX_PROPOSALS {
+            service.state.proposals.push(Proposal {
+                id: Uuid::new_v4(),
+                revision: 1,
+                source_root_id: Uuid::nil(),
+                source_relative: encode_relative(Path::new("fixture")),
+                source_display: "fixture".into(),
+                destination: None,
+                destination_name: None,
+                destination_display: None,
+                reason: "fixture".into(),
+                provenance: "test".into(),
+                warning: None,
+                status: "proposed".into(),
+                size: 0,
+                device: 0,
+                inode: 0,
+                modified_ns: 0,
+            });
+        }
+        assert!(matches!(service.scan_once(), Err(ServiceError::Limit)));
+        assert!(service.paused());
+        assert_eq!(service.proposals().len(), MAX_PROPOSALS);
     }
 }

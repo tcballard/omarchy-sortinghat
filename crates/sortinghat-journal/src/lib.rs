@@ -2,7 +2,7 @@
 
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -98,6 +98,7 @@ pub enum JournalError {
 
 pub struct Journal {
     connection: Connection,
+    path: PathBuf,
 }
 
 impl Journal {
@@ -118,7 +119,10 @@ impl Journal {
             );
             CREATE INDEX IF NOT EXISTS entries_state ON entries(state);",
         )?;
-        Ok(Self { connection })
+        Ok(Self {
+            connection,
+            path: path.to_path_buf(),
+        })
     }
 
     pub fn create(&mut self, entry: &Entry) -> Result<(), JournalError> {
@@ -279,6 +283,44 @@ impl Journal {
                SELECT id FROM entries WHERE state IN ('completed','undone','failed_safely','ignored')
                ORDER BY updated_at DESC, rowid DESC LIMIT -1 OFFSET ?1
              )", [retain])?)
+    }
+
+    pub fn enforce_retention(
+        &mut self,
+        retain: usize,
+        max_age_seconds: u64,
+        max_bytes: u64,
+    ) -> Result<usize, JournalError> {
+        let age = i64::try_from(max_age_seconds).map_err(|_| JournalError::Range)?;
+        let aged = self.connection.execute(
+            "DELETE FROM entries WHERE state IN ('completed','undone','failed_safely','ignored')
+             AND updated_at < unixepoch() - ?1",
+            [age],
+        )?;
+        let pruned = aged + self.prune_terminal(retain)?;
+        self.connection
+            .execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
+        let bytes = [
+            self.path.clone(),
+            PathBuf::from(format!("{}-wal", self.path.display())),
+            PathBuf::from(format!("{}-shm", self.path.display())),
+        ]
+        .iter()
+        .try_fold(0_u64, |total, path| {
+            let size = match std::fs::metadata(path) {
+                Ok(metadata) => metadata.len(),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => 0,
+                Err(error) => return Err(error),
+            };
+            total
+                .checked_add(size)
+                .ok_or_else(|| std::io::Error::other("journal size overflow"))
+        })
+        .map_err(|_| JournalError::Range)?;
+        if bytes > max_bytes {
+            return Err(JournalError::Limit);
+        }
+        Ok(pruned)
     }
 }
 
