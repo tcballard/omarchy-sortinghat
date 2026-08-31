@@ -7,8 +7,8 @@ use sortinghat_agent::{Adapter, AgentRequest};
 use sortinghat_core::{FileFacts, Rule, RuleDecision, evaluate_rules};
 use sortinghat_fs::{
     FsError, Identity, StabilityTracker, destination_exists_case_folded, device_fd, open_beneath,
-    open_root, publish_stage_at, retire_source_at, same_filesystem_move_at, verified_stage_copy_at,
-    verify_at,
+    open_root, publish_stage_at, retire_source_at, same_filesystem_move_at, sha256,
+    verified_stage_copy_at, verify_at,
 };
 use sortinghat_journal::{Entry, Journal, JournalError, State as JournalState};
 use std::collections::HashMap;
@@ -927,6 +927,43 @@ impl Service {
 
     fn recover_without_guessing(&mut self) -> Result<(), ServiceError> {
         for entry in self.journal.nonterminal()? {
+            if entry.state == JournalState::SourceRemoved {
+                let source = path_from_token(&entry.source_token);
+                let destination = path_from_token(&entry.destination_token);
+                let source_absent = matches!(
+                    fs::symlink_metadata(&source),
+                    Err(error) if error.kind() == io::ErrorKind::NotFound
+                );
+                let destination_verified = self
+                    .state
+                    .proposals
+                    .iter()
+                    .find(|proposal| proposal.id == entry.id)
+                    .is_some_and(|proposal| {
+                        verify_recovery_destination(&destination, proposal, entry.sha256.as_deref())
+                    });
+                if source_absent && destination_verified {
+                    let completed = self.journal.transition(
+                        entry.id,
+                        entry.revision,
+                        JournalState::Completed,
+                    )?;
+                    if let Some(proposal) = self
+                        .state
+                        .proposals
+                        .iter_mut()
+                        .find(|proposal| proposal.id == entry.id)
+                    {
+                        proposal.revision = completed.revision;
+                        proposal.status = "completed".into();
+                        proposal.warning = Some(
+                            "Restart verified destination evidence and completed the journal"
+                                .into(),
+                        );
+                    }
+                    continue;
+                }
+            }
             if matches!(
                 entry.state,
                 JournalState::Approved
@@ -948,10 +985,7 @@ impl Service {
                 {
                     proposal.revision = updated.revision;
                     proposal.status = "needs_attention".into();
-                    proposal.warning = Some(
-                        "Interrupted operation requires identity/checksum review; recovery did not guess"
-                            .into(),
-                    );
+                    proposal.warning = Some(recovery_warning(&entry, proposal));
                 }
             }
         }
@@ -997,6 +1031,42 @@ impl Service {
         fs::rename(&temporary, self.state_dir.join("state.json"))?;
         File::open(&self.state_dir)?.sync_all()?;
         Ok(())
+    }
+}
+
+fn path_from_token(token: &[u8]) -> PathBuf {
+    PathBuf::from(OsString::from_vec(token.to_vec()))
+}
+
+fn verify_recovery_destination(
+    destination: &Path,
+    proposal: &Proposal,
+    expected_sha256: Option<&str>,
+) -> bool {
+    let Ok(identity) = Identity::read(destination) else {
+        return false;
+    };
+    if identity.size != proposal.size {
+        return false;
+    }
+    if let Some(expected_sha256) = expected_sha256 {
+        return sha256(destination).is_ok_and(|actual| actual == expected_sha256);
+    }
+    identity == proposal_identity(proposal)
+}
+
+fn recovery_warning(entry: &Entry, proposal: &Proposal) -> String {
+    let source = path_from_token(&entry.source_token);
+    let destination = path_from_token(&entry.destination_token);
+    let source_verified =
+        Identity::read(&source).is_ok_and(|identity| identity == proposal_identity(proposal));
+    let destination_verified =
+        verify_recovery_destination(&destination, proposal, entry.sha256.as_deref());
+    match (source_verified, destination_verified) {
+        (true, true) => "Interrupted operation left verified source and destination copies; no copy was removed".into(),
+        (true, false) => "Interrupted operation retained the verified source; destination is absent or unverified".into(),
+        (false, true) => "Interrupted operation has a verified destination but source identity is unresolved".into(),
+        (false, false) => "Interrupted operation requires manual identity review; recovery did not guess".into(),
     }
 }
 
@@ -1265,5 +1335,47 @@ mod tests {
         let recovered = Service::open(&state).unwrap();
         assert_eq!(recovered.proposals()[0].status, "needs_attention");
         assert!(source.exists());
+    }
+
+    #[test]
+    fn restart_completes_only_verified_source_removed_state() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("watched");
+        let sorted = root.join("sorted");
+        fs::create_dir_all(&sorted).unwrap();
+        let source = root.join("fixture.pdf");
+        let destination = sorted.join("fixture.pdf");
+        fs::write(&source, b"%PDF-fixture").unwrap();
+        let state = temp.path().join("state");
+        let mut service = Service::open(&state).unwrap();
+        let registered = service.add_root(&root, true, true).unwrap();
+        service.scan_once().unwrap();
+        thread::sleep(Duration::from_millis(1_050));
+        service.scan_once().unwrap();
+        let proposal = service.proposals()[0].clone();
+        let proposal = service
+            .choose_destination(proposal.id, proposal.revision, registered.id, "sorted")
+            .unwrap();
+        fs::rename(&source, &destination).unwrap();
+        let approved = service
+            .journal
+            .transition(proposal.id, proposal.revision, JournalState::Approved)
+            .unwrap();
+        let published = service
+            .journal
+            .transition(proposal.id, approved.revision, JournalState::Published)
+            .unwrap();
+        let removed = service
+            .journal
+            .transition(proposal.id, published.revision, JournalState::SourceRemoved)
+            .unwrap();
+        service.state.proposals[0].revision = removed.revision;
+        service.save().unwrap();
+        drop(service);
+
+        let recovered = Service::open(&state).unwrap();
+        assert_eq!(recovered.proposals()[0].status, "completed");
+        assert!(destination.exists());
+        assert!(!source.exists());
     }
 }
