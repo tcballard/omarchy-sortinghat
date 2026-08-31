@@ -31,3 +31,7 @@ Closed the earlier absolute-mutation gap: approval now opens confined source and
 Wired the optional adapter after deterministic tie/abstention only. Enabling it is an explicit CLI setting; requests contain extension, verified MIME, coarse size bucket, source-root ID and allowed destination IDs. v0.1 has no content grant. Adapter failure or malformed output leaves an ordinary review proposal.
 
 The watcher ADR now matches implementation: bounded polling is authoritative for v0.1; a future inotify accelerator cannot bypass the same stable-sampling and bounded-rescan path.
+
+## 2026-08-31 — evidence-based restart recovery
+
+Recovery now distinguishes a provably finished move from ambiguous interruption. It may complete only a `source_removed` record whose source is absent and whose destination matches same-filesystem inode evidence or the recorded cross-filesystem SHA-256. Approved/copying/published/undoing records become `needs_attention`; warnings disclose whether a verified source, verified destination, both, or neither are present. No recovery path retries mutation automatically.

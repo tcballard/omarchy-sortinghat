@@ -42,3 +42,10 @@ Append-only verification evidence for `feat/machine-independent-v0.1`.
 - Added descriptor-relative same-filesystem rename, staged publication, verified source retirement and undo tests.
 - Added restart interruption, hardlink, oversized sparse file and case-folding coverage.
 - Agent is disabled by default, metadata-only when explicitly configured, 30-second bounded, destination-constrained and incapable of content access or mutation.
+
+## 2026-08-31 — evidence-based restart recovery
+
+- `cargo test --workspace --locked`: passed, 22 unit tests plus doc tests.
+- `cargo clippy --workspace --all-targets --locked -- -D warnings`: passed.
+- Restart after `source_removed` advances to `completed` only when the source is absent and the destination matches recorded identity/size/checksum evidence.
+- All other interrupted mutation states preserve copies and enter `needs_attention` with a coarse evidence summary.
