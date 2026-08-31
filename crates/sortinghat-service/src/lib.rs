@@ -3,10 +3,12 @@
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use serde::{Deserialize, Serialize};
+use sortinghat_agent::{Adapter, AgentRequest};
 use sortinghat_core::{FileFacts, Rule, RuleDecision, evaluate_rules};
 use sortinghat_fs::{
-    FsError, Identity, StabilityTracker, destination_exists_case_folded, open_beneath, open_root,
-    publish_stage, retire_source, same_filesystem_move, sha256, verified_stage_copy,
+    FsError, Identity, StabilityTracker, destination_exists_case_folded, device_fd, open_beneath,
+    open_root, publish_stage_at, retire_source_at, same_filesystem_move_at, verified_stage_copy_at,
+    verify_at,
 };
 use sortinghat_journal::{Entry, Journal, JournalError, State as JournalState};
 use std::collections::HashMap;
@@ -22,6 +24,7 @@ use uuid::Uuid;
 const MAX_ROOTS: usize = 16;
 const MAX_PROPOSALS: usize = 1_000;
 const MAX_WALK_DIRECTORIES: usize = 25_000;
+const MAX_WALK_FILES: usize = 100_000;
 const MAX_WALK_DEPTH: usize = 32;
 const MAX_STATE_BYTES: u64 = 8 * 1024 * 1024;
 
@@ -86,6 +89,26 @@ pub struct Proposal {
     pub modified_ns: i128,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct AgentSettings {
+    pub enabled: bool,
+    pub executable: Option<String>,
+    pub fixed_args: Vec<String>,
+    pub metadata_only: bool,
+}
+
+impl Default for AgentSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            executable: None,
+            fixed_args: Vec::new(),
+            metadata_only: true,
+        }
+    }
+}
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 struct PersistentState {
@@ -94,6 +117,8 @@ struct PersistentState {
     roots: Vec<Root>,
     rules: Vec<Rule>,
     proposals: Vec<Proposal>,
+    #[serde(default)]
+    agent: AgentSettings,
 }
 
 pub struct Service {
@@ -133,6 +158,8 @@ impl Service {
             journal,
             stability: HashMap::new(),
         };
+        service.journal.prune_terminal(10_000)?;
+        service.prune_terminal_proposals();
         service.recover_without_guessing()?;
         Ok(service)
     }
@@ -156,6 +183,38 @@ impl Service {
 
     pub fn proposals(&self) -> &[Proposal] {
         &self.state.proposals
+    }
+
+    pub const fn agent_settings(&self) -> &AgentSettings {
+        &self.state.agent
+    }
+
+    pub fn configure_metadata_agent(
+        &mut self,
+        executable: String,
+        fixed_args: Vec<String>,
+    ) -> Result<AgentSettings, ServiceError> {
+        if executable.is_empty()
+            || executable.len() > 4_096
+            || fixed_args.len() > 16
+            || fixed_args.iter().any(|argument| argument.len() > 1_024)
+        {
+            return Err(ServiceError::Limit);
+        }
+        self.state.agent = AgentSettings {
+            enabled: true,
+            executable: Some(executable),
+            fixed_args,
+            metadata_only: true,
+        };
+        self.save()?;
+        Ok(self.state.agent.clone())
+    }
+
+    pub fn disable_agent(&mut self) -> Result<AgentSettings, ServiceError> {
+        self.state.agent.enabled = false;
+        self.save()?;
+        Ok(self.state.agent.clone())
     }
 
     pub fn proposal(&self, id: Uuid) -> Result<&Proposal, ServiceError> {
@@ -242,6 +301,18 @@ impl Service {
         let mut created = 0;
         for root in roots {
             for relative in bounded_files(Path::new(&root.path))? {
+                if self
+                    .state
+                    .proposals
+                    .iter()
+                    .filter(|proposal| proposal.status == "proposed")
+                    .count()
+                    >= MAX_PROPOSALS
+                {
+                    self.state.paused = true;
+                    self.save()?;
+                    return Err(ServiceError::Limit);
+                }
                 if self.consider(&root, &relative)? {
                     created += 1;
                 }
@@ -386,6 +457,8 @@ impl Service {
         self.state.proposals[index].revision = entry.revision;
         self.state.proposals[index].status = "ignored".into();
         let result = self.state.proposals[index].clone();
+        self.prune_terminal_proposals();
+        self.journal.prune_terminal(10_000)?;
         self.save()?;
         Ok(result)
     }
@@ -433,7 +506,6 @@ impl Service {
             .destination
             .clone()
             .ok_or(ServiceError::DestinationRequired)?;
-        let source = self.source_path(index)?;
         let destination_root = self
             .state
             .roots
@@ -448,21 +520,32 @@ impl Service {
             .ok_or(ServiceError::UnsafePath)?;
         let relative = decode_relative(&proposal.source_relative)?;
         let root_fd = open_root(Path::new(&source_root.path))?;
-        let _verified_fd = open_beneath(&root_fd, &relative, rustix::fs::OFlags::RDONLY)?;
+        let verified_fd = open_beneath(&root_fd, &relative, rustix::fs::OFlags::RDONLY)?;
+        let source_parent_fd =
+            if let Some(parent) = relative.parent().filter(|p| !p.as_os_str().is_empty()) {
+                open_beneath(
+                    &root_fd,
+                    parent,
+                    rustix::fs::OFlags::RDONLY | rustix::fs::OFlags::DIRECTORY,
+                )?
+            } else {
+                open_root(Path::new(&source_root.path))?
+            };
+        let source_name = relative.file_name().ok_or(ServiceError::UnsafePath)?;
         let folder = Path::new(&destination_root.path).join(&choice.directory);
         let folder_metadata = fs::symlink_metadata(&folder)?;
         if !folder_metadata.is_dir() || folder_metadata.file_type().is_symlink() {
             return Err(ServiceError::UnsafePath);
         }
         let destination_root_fd = open_root(Path::new(&destination_root.path))?;
-        let _destination_folder_fd = if choice.directory == "." {
-            None
+        let destination_folder_fd = if choice.directory == "." {
+            open_root(Path::new(&destination_root.path))?
         } else {
-            Some(open_beneath(
+            open_beneath(
                 &destination_root_fd,
                 Path::new(&choice.directory),
-                rustix::fs::OFlags::PATH | rustix::fs::OFlags::DIRECTORY,
-            )?)
+                rustix::fs::OFlags::RDONLY | rustix::fs::OFlags::DIRECTORY,
+            )?
         };
         let destination = folder.join(
             proposal
@@ -484,8 +567,15 @@ impl Service {
             .journal
             .transition(id, revision, JournalState::Approved)?;
         self.state.proposals[index].revision = entry.revision;
-        if expected.device == folder.metadata()?.dev() {
-            same_filesystem_move(&source, &destination, expected)?;
+        let destination_name = destination.file_name().ok_or(ServiceError::UnsafePath)?;
+        if device_fd(&source_parent_fd)? == device_fd(&destination_folder_fd)? {
+            same_filesystem_move_at(
+                &source_parent_fd,
+                source_name,
+                &destination_folder_fd,
+                destination_name,
+                expected,
+            )?;
             entry = self
                 .journal
                 .transition(id, entry.revision, JournalState::Published)?;
@@ -493,17 +583,20 @@ impl Service {
             entry = self
                 .journal
                 .transition(id, entry.revision, JournalState::Copying)?;
-            let staging = folder.join(format!(".sortinghat-{id}.stage"));
-            let digest = verified_stage_copy(&source, &staging, expected)?;
+            let staging_name = OsString::from(format!(".sortinghat-{id}.stage"));
+            let digest = verified_stage_copy_at(
+                &verified_fd,
+                &destination_folder_fd,
+                &staging_name,
+                expected,
+            )?;
             self.journal.set_sha256(id, &digest)?;
-            publish_stage(&staging, &destination)?;
-            if sha256(&destination)? != digest {
-                return Err(ServiceError::Fs(FsError::VerificationFailed));
-            }
+            publish_stage_at(&destination_folder_fd, &staging_name, destination_name)?;
+            verify_at(&destination_folder_fd, destination_name, &digest)?;
             entry = self
                 .journal
                 .transition(id, entry.revision, JournalState::Published)?;
-            retire_source(&source, expected, &digest)?;
+            retire_source_at(&source_parent_fd, source_name, expected, &digest)?;
         }
         entry = self
             .journal
@@ -514,6 +607,8 @@ impl Service {
         self.state.proposals[index].revision = entry.revision;
         self.state.proposals[index].status = "completed".into();
         let result = self.state.proposals[index].clone();
+        self.prune_terminal_proposals();
+        self.journal.prune_terminal(10_000)?;
         self.save()?;
         Ok(result)
     }
@@ -528,17 +623,68 @@ impl Service {
         if source.exists() || destination_exists_case_folded(&source)? {
             return Err(ServiceError::Collision);
         }
-        let expected = Identity::read(&destination)?;
+        let proposal = self.state.proposals[index].clone();
+        let relative = decode_relative(&proposal.source_relative)?;
+        let source_root = self
+            .state
+            .roots
+            .iter()
+            .find(|root| root.id == proposal.source_root_id)
+            .ok_or(ServiceError::UnsafePath)?;
+        let choice = proposal
+            .destination
+            .as_ref()
+            .ok_or(ServiceError::DestinationRequired)?;
+        let destination_root = self
+            .state
+            .roots
+            .iter()
+            .find(|root| root.id == choice.root_id)
+            .ok_or(ServiceError::UnsafePath)?;
+        let source_root_fd = open_root(Path::new(&source_root.path))?;
+        let source_parent_fd =
+            if let Some(parent) = relative.parent().filter(|p| !p.as_os_str().is_empty()) {
+                open_beneath(
+                    &source_root_fd,
+                    parent,
+                    rustix::fs::OFlags::RDONLY | rustix::fs::OFlags::DIRECTORY,
+                )?
+            } else {
+                open_root(Path::new(&source_root.path))?
+            };
+        let destination_root_fd = open_root(Path::new(&destination_root.path))?;
+        let destination_parent_fd = if choice.directory == "." {
+            open_root(Path::new(&destination_root.path))?
+        } else {
+            open_beneath(
+                &destination_root_fd,
+                Path::new(&choice.directory),
+                rustix::fs::OFlags::RDONLY | rustix::fs::OFlags::DIRECTORY,
+            )?
+        };
+        if device_fd(&source_parent_fd)? != device_fd(&destination_parent_fd)? {
+            return Err(ServiceError::Fs(FsError::Io(io::Error::from_raw_os_error(
+                rustix::io::Errno::XDEV.raw_os_error(),
+            ))));
+        }
         let mut entry = self
             .journal
             .transition(id, revision, JournalState::Undoing)?;
-        same_filesystem_move(&destination, &source, expected)?;
+        same_filesystem_move_at(
+            &destination_parent_fd,
+            destination.file_name().ok_or(ServiceError::UnsafePath)?,
+            &source_parent_fd,
+            relative.file_name().ok_or(ServiceError::UnsafePath)?,
+            proposal_identity(&proposal),
+        )?;
         entry = self
             .journal
             .transition(id, entry.revision, JournalState::Undone)?;
         self.state.proposals[index].revision = entry.revision;
         self.state.proposals[index].status = "undone".into();
         let result = self.state.proposals[index].clone();
+        self.prune_terminal_proposals();
+        self.journal.prune_terminal(10_000)?;
         self.save()?;
         Ok(result)
     }
@@ -584,18 +730,12 @@ impl Service {
                 format!("rule:{}", rule_ids[0]),
                 None,
             ),
-            RuleDecision::Tie { reason, .. } => (
-                None,
-                reason,
-                "deterministic_tie".into(),
-                Some("Ambiguous: choose a destination before approval".into()),
-            ),
-            RuleDecision::Abstain { reason } => (
-                None,
-                reason,
-                "deterministic_abstain".into(),
-                Some("No rule decided; agent classification was not requested".into()),
-            ),
+            RuleDecision::Tie { reason, .. } => {
+                self.agent_or_fallback(&facts, identity.size, reason, "deterministic_tie")
+            }
+            RuleDecision::Abstain { reason } => {
+                self.agent_or_fallback(&facts, identity.size, reason, "deterministic_abstain")
+            }
         };
         let destination_display = destination
             .as_ref()
@@ -643,6 +783,82 @@ impl Service {
         })?;
         self.state.proposals.push(proposal);
         Ok(true)
+    }
+
+    fn agent_or_fallback(
+        &self,
+        facts: &FileFacts,
+        size: u64,
+        deterministic_reason: String,
+        fallback_provenance: &str,
+    ) -> (Option<DestinationChoice>, String, String, Option<String>) {
+        if !self.state.agent.enabled {
+            return (
+                None,
+                deterministic_reason,
+                fallback_provenance.into(),
+                Some("No deterministic decision; metadata agent is disabled".into()),
+            );
+        }
+        let Some(executable) = self.state.agent.executable.clone() else {
+            return (
+                None,
+                deterministic_reason,
+                fallback_provenance.into(),
+                Some("Agent is enabled but unavailable; choose a destination".into()),
+            );
+        };
+        let allowed_destination_ids = self
+            .state
+            .roots
+            .iter()
+            .filter(|root| root.destination)
+            .map(|root| root.id)
+            .collect::<Vec<_>>();
+        if allowed_destination_ids.is_empty() {
+            return (
+                None,
+                deterministic_reason,
+                fallback_provenance.into(),
+                Some("Agent has no registered destination to select".into()),
+            );
+        }
+        let correlation_id = Uuid::new_v4();
+        let request = AgentRequest {
+            schema_version: 1,
+            correlation_id,
+            filename_extension: facts.extension.clone(),
+            verified_mime: facts.verified_mime.clone(),
+            size_bucket: size_bucket(size).into(),
+            source_root_id: facts.source_root_id,
+            allowed_destination_ids,
+        };
+        let adapter = Adapter::local(executable, self.state.agent.fixed_args.clone());
+        match adapter.classify(&request) {
+            Ok(response) => match response.destination_id {
+                Some(root_id) => (
+                    Some(DestinationChoice {
+                        root_id,
+                        directory: ".".into(),
+                    }),
+                    response.reason,
+                    "agent_metadata".into(),
+                    Some("Agent result is a proposal and still requires approval".into()),
+                ),
+                None => (
+                    None,
+                    response.reason,
+                    "agent_abstain".into(),
+                    Some("Agent abstained; choose a destination".into()),
+                ),
+            },
+            Err(_) => (
+                None,
+                deterministic_reason,
+                fallback_provenance.into(),
+                Some("Agent unavailable or invalid; choose a destination".into()),
+            ),
+        }
     }
 
     fn proposal_index(&self, id: Uuid, revision: u64) -> Result<usize, ServiceError> {
@@ -742,6 +958,28 @@ impl Service {
         self.save()
     }
 
+    fn prune_terminal_proposals(&mut self) {
+        let terminal = self
+            .state
+            .proposals
+            .iter()
+            .filter(|proposal| {
+                matches!(proposal.status.as_str(), "completed" | "ignored" | "undone")
+            })
+            .count();
+        let mut remove = terminal.saturating_sub(10_000);
+        self.state.proposals.retain(|proposal| {
+            let is_terminal =
+                matches!(proposal.status.as_str(), "completed" | "ignored" | "undone");
+            if is_terminal && remove > 0 {
+                remove -= 1;
+                false
+            } else {
+                true
+            }
+        });
+    }
+
     fn save(&self) -> Result<(), ServiceError> {
         let body =
             serde_json::to_vec_pretty(&self.state).map_err(|_| ServiceError::MalformedState)?;
@@ -781,6 +1019,9 @@ fn bounded_files(root: &Path) -> Result<Vec<PathBuf>, ServiceError> {
             if file_type.is_dir() {
                 pending.push((child, depth + 1));
             } else if file_type.is_file() {
+                if result.len() >= MAX_WALK_FILES {
+                    return Err(ServiceError::Limit);
+                }
                 result.push(child);
             }
         }
@@ -834,6 +1075,18 @@ fn is_partial(path: &Path) -> bool {
     [".part", ".partial", ".crdownload", ".download", ".tmp"]
         .iter()
         .any(|suffix| name.ends_with(suffix))
+}
+
+const fn size_bucket(size: u64) -> &'static str {
+    if size < 1024 * 1024 {
+        "under_1_mib"
+    } else if size < 100 * 1024 * 1024 {
+        "1_to_100_mib"
+    } else if size < 1024 * 1024 * 1024 {
+        "100_mib_to_1_gib"
+    } else {
+        "1_to_4_gib"
+    }
 }
 
 fn encode_relative(path: &Path) -> String {
@@ -926,6 +1179,20 @@ mod tests {
     }
 
     #[test]
+    fn agent_is_metadata_only_and_disabled_by_default() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut service = Service::open(&temp.path().join("state")).unwrap();
+        assert!(!service.agent_settings().enabled);
+        assert!(service.agent_settings().metadata_only);
+        let configured = service
+            .configure_metadata_agent("/bin/cat".into(), vec![])
+            .unwrap();
+        assert!(configured.enabled);
+        assert!(configured.metadata_only);
+        assert!(!service.disable_agent().unwrap().enabled);
+    }
+
+    #[test]
     fn invalid_utf8_relative_names_round_trip() {
         let path = PathBuf::from(OsString::from_vec(vec![b'a', 0xff, b'b']));
         assert_eq!(decode_relative(&encode_relative(&path)).unwrap(), path);
@@ -971,5 +1238,32 @@ mod tests {
         assert_eq!(service.scan_once().unwrap(), 0);
         thread::sleep(Duration::from_millis(1_050));
         assert_eq!(service.scan_once().unwrap(), 1);
+    }
+
+    #[test]
+    fn interrupted_operation_restarts_in_needs_attention_without_mutation() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("watched");
+        fs::create_dir(&root).unwrap();
+        let source = root.join("fixture.pdf");
+        fs::write(&source, b"%PDF-fixture").unwrap();
+        let state = temp.path().join("state");
+        let mut service = Service::open(&state).unwrap();
+        service.add_root(&root, true, true).unwrap();
+        service.scan_once().unwrap();
+        thread::sleep(Duration::from_millis(1_050));
+        service.scan_once().unwrap();
+        let proposal = service.proposals()[0].clone();
+        let approved = service
+            .journal
+            .transition(proposal.id, proposal.revision, JournalState::Approved)
+            .unwrap();
+        service.state.proposals[0].revision = approved.revision;
+        service.save().unwrap();
+        drop(service);
+
+        let recovered = Service::open(&state).unwrap();
+        assert_eq!(recovered.proposals()[0].status, "needs_attention");
+        assert!(source.exists());
     }
 }

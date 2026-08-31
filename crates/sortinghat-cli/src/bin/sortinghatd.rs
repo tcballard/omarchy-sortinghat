@@ -35,6 +35,13 @@ struct DestinationArg {
     directory: String,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AgentArg {
+    executable: String,
+    fixed_args: Vec<String>,
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     if let Some(parent) = args.socket.parent() {
@@ -174,6 +181,12 @@ fn dispatch(service: &mut Service, request: &Request) -> Result<Response, Servic
                 .map_err(|_| ServiceError::MalformedState)?;
             json!(service.create_rule_from_proposal(id(request)?, priority)?)
         }
+        "agent_status" => json!(service.agent_settings()),
+        "agent_enable" => {
+            let arg: AgentArg = parse_argument(request)?;
+            json!(service.configure_metadata_agent(arg.executable, arg.fixed_args)?)
+        }
+        "agent_disable" => json!(service.disable_agent()?),
         "undo" => json!(service.undo(id(request)?, revision(request)?)?),
         _ => return Err(ServiceError::NotFound),
     };

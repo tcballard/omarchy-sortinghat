@@ -25,7 +25,7 @@ All implementation belongs here. Do not modify `tcballard/SortingHat`, OmaOffice
 - Retain enrolled root identity and resolve descendants FD-relative with Linux `openat2` beneath/no-symlink/no-magic-link/no-cross-mount flags.
 - Accept only single-link regular files. Reject traversal, absolute paths, symlinks, hardlinks, directories, devices, sockets and FIFOs.
 - Preserve raw Unix path bytes internally; expose bounded escaped display strings and opaque IDs.
-- Treat inotify as a hint: close-write/moved-to plus repeated stable inode/size/mtime/ctime samples, bounded MIME/hash inspection and revalidation at approval.
+- Treat discovery as a hint: bounded polling in v0.1 plus repeated stable inode/size/mtime/ctime samples, bounded MIME/hash inspection and revalidation at approval. A future inotify accelerator may not bypass settling.
 - Debounce duplicates; overflow triggers bounded rescan and visible degraded/paused state.
 - Never overwrite or silently rename a collision. Check exact and case-folding collisions; kernel no-replace is authoritative.
 - Same-filesystem moves use `renameat2(RENAME_NOREPLACE)`, parent sync and destination verification.

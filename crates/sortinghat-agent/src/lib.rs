@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::io::{self, Write};
 use std::process::{Command, Stdio};
+use std::thread;
+use std::time::{Duration, Instant};
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -43,6 +45,10 @@ pub enum AgentError {
     Malformed,
     #[error("agent selected an unregistered destination")]
     UnregisteredDestination,
+    #[error("agent timed out")]
+    Timeout,
+    #[error("file content permission denied")]
+    ContentDenied,
 }
 
 #[derive(Debug, Clone)]
@@ -83,6 +89,18 @@ impl Adapter {
             .take()
             .ok_or(AgentError::Malformed)?
             .write_all(&body)?;
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            if child.try_wait()?.is_some() {
+                break;
+            }
+            if Instant::now() >= deadline {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(AgentError::Timeout);
+            }
+            thread::sleep(Duration::from_millis(25));
+        }
         let output = child.wait_with_output()?;
         if !output.status.success() || output.stdout.len() > MAX_OUTPUT_BYTES {
             return Err(AgentError::Malformed);
@@ -107,6 +125,10 @@ impl Adapter {
             return Err(AgentError::UnregisteredDestination);
         }
         Ok(response)
+    }
+
+    pub const fn classify_content(&self, _content: &[u8]) -> Result<AgentResponse, AgentError> {
+        Err(AgentError::ContentDenied)
     }
 }
 
@@ -146,6 +168,14 @@ mod tests {
         assert!(matches!(
             adapter.classify(&request),
             Err(AgentError::Malformed)
+        ));
+    }
+
+    #[test]
+    fn content_is_denied_independently_of_metadata_configuration() {
+        assert!(matches!(
+            Adapter::disabled().classify_content(b"sensitive"),
+            Err(AgentError::ContentDenied)
         ));
     }
 }
