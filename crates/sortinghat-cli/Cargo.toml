@@ -1,0 +1,27 @@
+[package]
+name = "sortinghat-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "sortinghat"
+path = "src/bin/sortinghat.rs"
+
+[[bin]]
+name = "sortinghatd"
+path = "src/bin/sortinghatd.rs"
+
+[dependencies]
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sortinghat-core = { path = "../sortinghat-core" }
+thiserror.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true
+
