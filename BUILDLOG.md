@@ -10,3 +10,9 @@ Append-only verification evidence for `feat/machine-independent-v0.1`.
 - `tcballard/build-omarchy-plugins`: no tagged release exists; moving `main` was not inspected.
 - `cargo test --workspace`: passed, 10 unit tests plus doc tests.
 
+## 2026-08-31 — persistent service and CLI
+
+- `cargo test --workspace`: passed, 15 unit tests plus doc tests.
+- `cargo clippy --workspace --all-targets -- -D warnings`: passed.
+- `cargo fmt --all -- --check`: passed.
+- Daemon CLI smoke test: blocked. This execution sandbox returned `EPERM` while creating the Unix socket; no live daemon claim is made.

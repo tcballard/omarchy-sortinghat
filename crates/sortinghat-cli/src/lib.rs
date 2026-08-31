@@ -26,6 +26,7 @@ pub struct Response {
     pub ok: bool,
     pub state: String,
     pub message: String,
+    pub data: serde_json::Value,
 }
 
 #[derive(Debug, Error)]
