@@ -1,7 +1,7 @@
 use clap::Parser;
 use serde::Deserialize;
 use serde_json::{Value, json};
-use sortinghat_cli::{MAX_IPC_BYTES, Request, Response};
+use sortinghat_cli::{MAX_IPC_BYTES, Request, Response, validate_request};
 use sortinghat_service::{Service, ServiceError};
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -88,17 +88,25 @@ fn handle(mut stream: UnixStream, service: &mut Service) -> Result<(), Box<dyn s
         return Ok(());
     }
     let request: Request = serde_json::from_slice(&line)?;
-    if request.schema_version != 1 {
-        return Ok(());
-    }
-    let response = dispatch(service, &request).unwrap_or_else(|error| Response {
-        schema_version: 1,
-        correlation_id: request.correlation_id,
-        ok: false,
-        state: error_state(&error).into(),
-        message: error.to_string(),
-        data: Value::Null,
-    });
+    let response = if validate_request(&request).is_err() {
+        Response {
+            schema_version: 1,
+            correlation_id: request.correlation_id,
+            ok: false,
+            state: "rejected".into(),
+            message: "invalid request".into(),
+            data: Value::Null,
+        }
+    } else {
+        dispatch(service, &request).unwrap_or_else(|error| Response {
+            schema_version: 1,
+            correlation_id: request.correlation_id,
+            ok: false,
+            state: error_state(&error).into(),
+            message: error.to_string(),
+            data: Value::Null,
+        })
+    };
     serde_json::to_writer(&mut stream, &response)?;
     stream.write_all(b"\n")?;
     Ok(())

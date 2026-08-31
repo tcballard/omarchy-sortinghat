@@ -216,6 +216,29 @@ mod tests {
     }
 
     #[test]
+    fn equal_priority_identical_destinations_decide_once() {
+        let decision = evaluate_rules(&[rule(2, "docs"), rule(2, "docs")], &facts()).unwrap();
+        assert!(
+            matches!(decision, RuleDecision::Destination { destination, rule_ids, .. }
+            if destination.directory == "docs" && rule_ids.len() == 2)
+        );
+    }
+
+    #[test]
+    fn filename_patterns_are_typed_and_deterministic() {
+        let mut pattern = rule(4, "reports");
+        pattern.predicates = vec![Predicate::FilenameGlob {
+            value: "report-*.pdf".into(),
+        }];
+        let mut matching = facts();
+        matching.filename = "report-2026.pdf".into();
+        assert!(matches!(
+            evaluate_rules(&[pattern], &matching).unwrap(),
+            RuleDecision::Destination { .. }
+        ));
+    }
+
+    #[test]
     fn mime_does_not_trust_extension() {
         let mut mime_rule = rule(3, "pdfs");
         mime_rule.predicates = vec![Predicate::VerifiedMime {
@@ -230,5 +253,14 @@ mod tests {
     #[test]
     fn traversal_is_rejected() {
         assert!(validate_relative_directory("../escape").is_err());
+    }
+
+    #[test]
+    fn rule_limit_fails_closed() {
+        let rules = (0..=MAX_RULES).map(|_| rule(1, "docs")).collect::<Vec<_>>();
+        assert_eq!(
+            evaluate_rules(&rules, &facts()),
+            Err(RuleError::TooManyRules)
+        );
     }
 }

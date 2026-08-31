@@ -14,6 +14,7 @@ cd "$repo_root"
 "$cargo_bin" test --workspace --locked
 "$cargo_bin" metadata --locked --format-version 1 >/dev/null
 cargo-deny check
+systemd-analyze security --offline=yes packaging/systemd/sortinghat.service >/dev/null
 
 curl --fail --silent --show-error --location \
   "https://raw.githubusercontent.com/omacom/omarchy/$quattro_sha/bin/omarchy-plugin-validate" \

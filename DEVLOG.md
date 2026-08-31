@@ -35,3 +35,11 @@ The watcher ADR now matches implementation: bounded polling is authoritative for
 ## 2026-08-31 — evidence-based restart recovery
 
 Recovery now distinguishes a provably finished move from ambiguous interruption. It may complete only a `source_removed` record whose source is absent and whose destination matches same-filesystem inode evidence or the recorded cross-filesystem SHA-256. Approved/copying/published/undoing records become `needs_attention`; warnings disclose whether a verified source, verified destination, both, or neither are present. No recovery path retries mutation automatically.
+
+## 2026-08-31 — bounded protocol and retention gates
+
+The daemon now rejects unknown fields, non-v1 requests, nil correlation IDs and oversized arguments before dispatch. Active queue saturation pauses the watcher rather than dropping work. Traversal, state, journal age/count/bytes and rule/agent inputs have explicit caps; retention deletes terminal records only.
+
+Same-filesystem moves sync and reverify both directory sides. Staged cross-filesystem copies apply the source mode and access/modification times before durable publication. An ignored or already-seen physical identity does not immediately re-enter review. The uninstall helper is recoverable and preserves plugin data and state.
+
+The machine-independent test matrix remains candid: deterministic permission-failure injection and exhaustive 10,000-entry journal fixtures are not claimed. Live Quickshell, user-systemd and Unix-socket acceptance remain gated by the unavailable host capabilities.

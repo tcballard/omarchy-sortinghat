@@ -2,8 +2,8 @@
 
 use rustix::fd::{AsFd, OwnedFd};
 use rustix::fs::{
-    AtFlags, Mode, OFlags, RenameFlags, ResolveFlags, fstat, fsync, open, openat, openat2,
-    renameat_with, unlinkat,
+    AtFlags, Mode, OFlags, RenameFlags, ResolveFlags, Timespec, Timestamps, fchmod, fstat, fsync,
+    futimens, open, openat, openat2, renameat_with, unlinkat,
 };
 use sha2::{Digest, Sha256};
 use std::ffi::OsStr;
@@ -169,6 +169,8 @@ pub fn same_filesystem_move_at<SFd: AsFd, DFd: AsFd>(
         RenameFlags::NOREPLACE,
     ) {
         Ok(()) => {
+            fsync(&source_parent)
+                .map_err(|error| FsError::Io(io::Error::from_raw_os_error(error.raw_os_error())))?;
             fsync(&destination_parent)
                 .map_err(|error| FsError::Io(io::Error::from_raw_os_error(error.raw_os_error())))?;
             let destination_fd = openat2(
@@ -200,6 +202,8 @@ pub fn verified_stage_copy_at<SFd: AsFd, DFd: AsFd>(
     if identity_fd(&source)? != expected {
         return Err(FsError::IdentityChanged);
     }
+    let source_stat = fstat(&source)
+        .map_err(|error| FsError::Io(io::Error::from_raw_os_error(error.raw_os_error())))?;
     let output = openat(
         &destination_parent,
         staging_name,
@@ -234,6 +238,25 @@ pub fn verified_stage_copy_at<SFd: AsFd, DFd: AsFd>(
         hasher.update(&buffer[..count]);
     }
     writer.flush()?;
+    fchmod(
+        writer.get_ref(),
+        Mode::from_bits_truncate(source_stat.st_mode as _),
+    )
+    .map_err(|error| FsError::Io(io::Error::from_raw_os_error(error.raw_os_error())))?;
+    futimens(
+        writer.get_ref(),
+        &Timestamps {
+            last_access: Timespec {
+                tv_sec: source_stat.st_atime,
+                tv_nsec: source_stat.st_atime_nsec as _,
+            },
+            last_modification: Timespec {
+                tv_sec: source_stat.st_mtime,
+                tv_nsec: source_stat.st_mtime_nsec as _,
+            },
+        },
+    )
+    .map_err(|error| FsError::Io(io::Error::from_raw_os_error(error.raw_os_error())))?;
     writer.get_ref().sync_all()?;
     if copied != expected.size {
         return Err(FsError::IdentityChanged);
@@ -502,6 +525,7 @@ pub fn retire_source(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::unix::fs::PermissionsExt;
 
     #[test]
     fn same_fs_never_overwrites() {
@@ -535,6 +559,7 @@ mod tests {
         fs::create_dir(&destination_dir).unwrap();
         let source = source_dir.join("payload");
         fs::write(&source, b"verified payload").unwrap();
+        fs::set_permissions(&source, fs::Permissions::from_mode(0o640)).unwrap();
         let expected = Identity::read(&source).unwrap();
         let source_parent = open_root(&source_dir).unwrap();
         let destination_parent = open_root(&destination_dir).unwrap();
@@ -558,6 +583,14 @@ mod tests {
         assert_eq!(
             fs::read(destination_dir.join("payload")).unwrap(),
             b"verified payload"
+        );
+        assert_eq!(
+            fs::metadata(destination_dir.join("payload"))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o640
         );
     }
 
