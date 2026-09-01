@@ -25,7 +25,7 @@ files
 
 SortingHat is a review-first file organisation service and bar widget. It ships a separate checksum-verified x86_64 runtime package and a hardened systemd user service. The installer and uninstaller verify file provenance and refuse modified or unowned targets. Deterministic operation is offline; the optional local agent is disabled by default and receives bounded metadata only. v0.1 has no file-content permission or telemetry.
 
-The Automated Security Baseline is expected to report installer and service-management capabilities requiring maintainer review. No passwordless privilege policy, privileged helper or bundled executable is present in the plugin repository.
+The current Automated Security Baseline reports no findings. Its installer and service-management capabilities require maintainer review. No passwordless privilege policy, privileged helper or bundled executable is present in the plugin repository.
 
 ### Submission checklist
 

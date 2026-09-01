@@ -11,6 +11,7 @@
 - [x] CI runs for pull requests, the feature branch and `main`.
 - [x] Push CI publishes a 14-day exact-commit runtime candidate for live acceptance.
 - [x] Marketplace ID search found no collision before the candidate change.
+- [x] Current marketplace Automated Security Baseline reports no findings; installer and service-management capabilities require review.
 
 ## Live and publication gates
 
