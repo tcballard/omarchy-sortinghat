@@ -20,13 +20,13 @@ See [the privacy boundary](docs/privacy.md) and [the architecture decision](docs
 
 ## Status
 
-Version 0.1.0 is a release candidate. Machine-independent verification passes; live Omarchy UI, keyboard, service-manager and network-observation acceptance remains a separate required gate and is not yet claimed.
+Version 0.1.0 is the first public release. The complete machine-independent verification suite passes, and the packaged install has been owner-verified on Omarchy Quattro. A detailed live acceptance capture is documented separately and is not claimed as automated CI evidence.
 
 ## Install
 
 Requirements: Omarchy Quattro on x86_64 Linux, a user systemd manager, and `curl`, `tar` and `sha256sum`. The release runtime is prebuilt; Rust is not required.
 
-Install the reviewed v0.1.0 runtime package after the release is published:
+Install the reviewed v0.1.0 runtime package:
 
 ```bash
 version=0.1.0

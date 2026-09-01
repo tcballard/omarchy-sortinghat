@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 — release candidate
+## 0.1.0 — 2026-09-01
 
 - Adds explicit watched and destination roots with bounded stable-file detection.
 - Adds deterministic typed rules, explained proposals and a bounded review queue.
@@ -11,4 +11,4 @@
 - Adds the native Omarchy bar widget and review panel with honest missing, paused and error states.
 - Adds provenance-aware runtime installation, recoverable removal and pinned verification.
 
-Live Omarchy acceptance remains required before the date and release status are finalized.
+The packaged install was owner-verified on Omarchy Quattro before publication.
