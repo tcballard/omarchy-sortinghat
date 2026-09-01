@@ -347,6 +347,28 @@ fn allowed(from: State, to: State) -> bool {
 mod tests {
     use super::*;
 
+    fn seed_terminal_entries(journal: &mut Journal, count: usize) {
+        let transaction = journal.connection.transaction().unwrap();
+        {
+            let mut insert = transaction
+                .prepare(
+                    "INSERT INTO entries(
+                        id, revision, state, source_token, destination_token, size, updated_at
+                     ) VALUES (?1, 1, 'ignored', X'73', X'64', 0, ?2)",
+                )
+                .unwrap();
+            for index in 0..count {
+                insert
+                    .execute(params![
+                        Uuid::from_u128(index as u128 + 1).to_string(),
+                        i64::try_from(index).unwrap()
+                    ])
+                    .unwrap();
+            }
+        }
+        transaction.commit().unwrap();
+    }
+
     #[test]
     fn revision_and_transition_are_enforced() {
         let dir = tempfile::tempdir().unwrap();
@@ -372,6 +394,46 @@ mod tests {
         assert!(matches!(
             journal.transition(id, 2, State::Completed),
             Err(JournalError::InvalidTransition)
+        ));
+    }
+
+    #[test]
+    fn ten_thousand_terminal_entry_limit_preserves_active_evidence() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut journal = Journal::open(&dir.path().join("journal.sqlite3")).unwrap();
+        seed_terminal_entries(&mut journal, 10_001);
+        let active_id = Uuid::new_v4();
+        journal
+            .create(&Entry {
+                id: active_id,
+                revision: 1,
+                state: State::Proposed,
+                source_token: b"active-source".to_vec(),
+                destination_token: b"active-destination".to_vec(),
+                size: 4,
+                sha256: None,
+            })
+            .unwrap();
+
+        let pruned = journal
+            .enforce_retention(10_000, i64::MAX as u64, u64::MAX)
+            .unwrap();
+
+        assert_eq!(pruned, 1);
+        assert_eq!(journal.active_count().unwrap(), 1);
+        assert_eq!(journal.get(active_id).unwrap().state, State::Proposed);
+        let terminal_count: i64 = journal
+            .connection
+            .query_row(
+                "SELECT count(*) FROM entries WHERE state='ignored'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(terminal_count, 10_000);
+        assert!(matches!(
+            journal.get(Uuid::from_u128(1)),
+            Err(JournalError::NotFound)
         ));
     }
 }
