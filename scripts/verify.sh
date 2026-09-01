@@ -5,6 +5,7 @@ repo_root=$(git rev-parse --show-toplevel)
 cargo_bin=${CARGO:-cargo}
 quattro_sha=981274b20af8e85c09845071ac33c6230909f119
 validator_sha256=f7507e5042eb970e3dc918bdf6bf251c7557443892a77e71a17d7019ddde72c8
+qml_scanner_sha256=577ac771ca2ac171b108d49c48d4d33b01d9fe8887bdc1563d9190d480a4bcc4
 work_dir=$(mktemp -d)
 trap 'rm -rf "$work_dir"' EXIT
 
@@ -27,6 +28,8 @@ chmod 700 "$work_dir/omarchy-plugin-validate"
 curl --fail --silent --show-error --location \
   "https://raw.githubusercontent.com/omacom/omarchy/$quattro_sha/test/shell.d/qml-text-format-scan.py" \
   --output "$work_dir/qml-text-format-scan.py"
+printf '%s  %s\n' "$qml_scanner_sha256" "$work_dir/qml-text-format-scan.py" \
+  | sha256sum --check --status
 mkdir -p "$work_dir/scan/shell"
 cp "$repo_root"/omarchy-plugin/*.qml "$work_dir/scan/shell/"
 python3 "$work_dir/qml-text-format-scan.py" "$work_dir/scan"
