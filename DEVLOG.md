@@ -43,3 +43,11 @@ The daemon now rejects unknown fields, non-v1 requests, nil correlation IDs and 
 Same-filesystem moves sync and reverify both directory sides. Staged cross-filesystem copies apply the source mode and access/modification times before durable publication. An ignored or already-seen physical identity does not immediately re-enter review. The uninstall helper is recoverable and preserves plugin data and state.
 
 The machine-independent test matrix remains candid: deterministic permission-failure injection and exhaustive 10,000-entry journal fixtures are not claimed. Live Quickshell, user-systemd and Unix-socket acceptance remain gated by the unavailable host capabilities.
+
+## 2026-09-01 — marketplace release preparation
+
+The two deterministic test gaps are now closed. Permission denial is injected at the descriptor-relative rename boundary and maps to the public filesystem-error state without mutation. A real 10,001-terminal-row SQLite fixture proves the 10,000-entry retention limit while preserving active evidence.
+
+The release path no longer requires users to compile Rust. Exact-commit packaging produces a versioned x86_64 archive, checksum, provenance-aware installer and recoverable uninstaller. Installation refuses existing paths unless their hashes match SortingHat's prior provenance; removal likewise refuses modified or unowned files.
+
+Live Quickshell rendering, keyboard-only use, user-systemd activation, daemon/CLI IPC, genuine preview capture and unintended-network observation still require a real Omarchy Quattro session. No release or marketplace claim should cross that boundary until the capture is completed.

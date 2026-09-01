@@ -14,6 +14,7 @@ cd "$repo_root"
 "$cargo_bin" test --workspace --locked
 "$cargo_bin" metadata --locked --format-version 1 >/dev/null
 cargo-deny check
+./test/install-test.sh
 systemd-analyze security --offline=yes packaging/systemd/sortinghat.service >/dev/null
 
 curl --fail --silent --show-error --location \

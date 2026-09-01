@@ -6,9 +6,9 @@ import qs.Commons
 
 BarWidget {
   id: root
-  moduleName: "tcballard.sortinghat"
+  moduleName: "io.github.tcballard.sortinghat"
 
-  readonly property var sortingService: bar?.shell?.serviceFor("tcballard.sortinghat")
+  readonly property var sortingService: bar?.shell?.serviceFor("io.github.tcballard.sortinghat")
   readonly property int reviewCount: sortingService ? sortingService.awaitingReview : 0
   readonly property bool runtimeHealthy: sortingService
     && (sortingService.runtimeState === "running" || sortingService.runtimeState === "paused")
