@@ -73,3 +73,4 @@ Append-only verification evidence for `feat/machine-independent-v0.1`.
 - Changed the permanent candidate ID to `io.github.tcballard.sortinghat`; no marketplace collision was found before the change.
 - Added versioned x86_64 release packaging with a local installer, exact source provenance, owned-upgrade recovery and modified/unowned-file refusal. Rust is no longer a release-install dependency.
 - Root README now directly documents requirements, checksum verification, installation and recoverable removal. Release and marketplace drafts preserve live-only claims as blocked.
+- Push CI packages and retains the exact committed candidate for 14 days so live acceptance can use the tested runtime without a local Rust toolchain.

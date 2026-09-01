@@ -9,6 +9,7 @@
 - [x] Installer and uninstaller verify ownership and refuse modified or unowned files.
 - [x] Rust tests, Clippy, formatting, dependency policy, installer lifecycle, systemd analysis, pinned Omarchy validation, QML dynamic-text scanning and secret-pattern scanning pass.
 - [x] CI runs for pull requests, the feature branch and `main`.
+- [x] Push CI publishes a 14-day exact-commit runtime candidate for live acceptance.
 - [x] Marketplace ID search found no collision before the candidate change.
 
 ## Live and publication gates
