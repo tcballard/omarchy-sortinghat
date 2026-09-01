@@ -150,6 +150,32 @@ pub fn same_filesystem_move_at<SFd: AsFd, DFd: AsFd>(
     destination_name: &OsStr,
     expected: Identity,
 ) -> Result<(), FsError> {
+    same_filesystem_move_at_with(
+        source_parent,
+        source_name,
+        destination_parent,
+        destination_name,
+        expected,
+        |source_parent, source_name, destination_parent, destination_name| {
+            renameat_with(
+                source_parent,
+                source_name,
+                destination_parent,
+                destination_name,
+                RenameFlags::NOREPLACE,
+            )
+        },
+    )
+}
+
+fn same_filesystem_move_at_with<SFd: AsFd, DFd: AsFd>(
+    source_parent: SFd,
+    source_name: &OsStr,
+    destination_parent: DFd,
+    destination_name: &OsStr,
+    expected: Identity,
+    rename: impl FnOnce(&SFd, &OsStr, &DFd, &OsStr) -> Result<(), rustix::io::Errno>,
+) -> Result<(), FsError> {
     let source_fd = openat2(
         &source_parent,
         source_name,
@@ -161,12 +187,11 @@ pub fn same_filesystem_move_at<SFd: AsFd, DFd: AsFd>(
     if identity_fd(&source_fd)? != expected {
         return Err(FsError::IdentityChanged);
     }
-    match renameat_with(
+    match rename(
         &source_parent,
         source_name,
         &destination_parent,
         destination_name,
-        RenameFlags::NOREPLACE,
     ) {
         Ok(()) => {
             fsync(&source_parent)
@@ -537,6 +562,35 @@ mod tests {
         let result = same_filesystem_move(&source, &destination, Identity::read(&source).unwrap());
         assert!(matches!(result, Err(FsError::Collision)));
         assert_eq!(fs::read(&destination).unwrap(), b"old");
+    }
+
+    #[test]
+    fn injected_permission_failure_preserves_the_source() {
+        let dir = tempfile::tempdir().unwrap();
+        let source_dir = dir.path().join("source-dir");
+        let destination_dir = dir.path().join("destination-dir");
+        fs::create_dir(&source_dir).unwrap();
+        fs::create_dir(&destination_dir).unwrap();
+        let source = source_dir.join("payload");
+        let destination = destination_dir.join("payload");
+        fs::write(&source, b"payload").unwrap();
+        let expected = Identity::read(&source).unwrap();
+
+        let result = same_filesystem_move_at_with(
+            open_root(&source_dir).unwrap(),
+            OsStr::new("payload"),
+            open_root(&destination_dir).unwrap(),
+            OsStr::new("payload"),
+            expected,
+            |_, _, _, _| Err(rustix::io::Errno::ACCESS),
+        );
+
+        assert!(matches!(
+            result,
+            Err(FsError::Io(error)) if error.kind() == io::ErrorKind::PermissionDenied
+        ));
+        assert_eq!(fs::read(source).unwrap(), b"payload");
+        assert!(!destination.exists());
     }
 
     #[test]

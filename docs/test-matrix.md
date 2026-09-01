@@ -13,8 +13,8 @@
 | Oversized files | sparse-file limit test |
 | Interrupted/restart recovery | needs-attention and verified-source-removed restart tests |
 | Agent unavailable/malformed/content denied | `sortinghat-agent` and service settings tests |
-| Permission errors | errors are propagated and mapped to `filesystem_error`; deterministic permission injection is not yet implemented |
-| Queue/journal limits | active queue saturation is fixture-tested; journal count, age and byte caps fail closed, but exhaustive 10,000-entry journal fixtures are not yet implemented |
+| Permission errors | deterministic denial at the no-replace rename boundary preserves the source; daemon mapping reports `filesystem_error` |
+| Queue/journal limits | active queue saturation and a 10,001-terminal-entry SQLite fixture prove the 10,000-entry cap without pruning active evidence; age and byte caps fail closed |
 | Live QML, systemd user manager, Unix IPC | live-only gate; this container rejects Unix sockets and has no user manager |
 
-The two missing deterministic injection/limit fixtures above remain review findings, not passed claims. Live acceptance is tracked separately in `docs/live-acceptance.md`.
+Live acceptance is tracked separately in `docs/live-acceptance.md`.

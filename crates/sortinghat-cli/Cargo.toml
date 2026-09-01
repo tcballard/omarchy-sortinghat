@@ -24,5 +24,8 @@ thiserror.workspace = true
 uuid.workspace = true
 rustix.workspace = true
 
+[dev-dependencies]
+sortinghat-fs = { path = "../sortinghat-fs", version = "=0.1.0" }
+
 [lints]
 workspace = true

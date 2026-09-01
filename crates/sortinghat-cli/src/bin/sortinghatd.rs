@@ -240,3 +240,17 @@ fn error_state(error: &ServiceError) -> &'static str {
         _ => "rejected",
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sortinghat_service::ServiceError;
+
+    #[test]
+    fn permission_denial_is_reported_as_a_filesystem_error() {
+        let error = ServiceError::Fs(sortinghat_fs::FsError::Io(std::io::Error::from(
+            std::io::ErrorKind::PermissionDenied,
+        )));
+        assert_eq!(error_state(&error), "filesystem_error");
+    }
+}

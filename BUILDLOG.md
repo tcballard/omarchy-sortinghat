@@ -58,3 +58,10 @@ Append-only verification evidence for `feat/machine-independent-v0.1`.
 - Pinned upstream manifest validator and dynamic QML text scan: passed.
 - Offline systemd security/parse analysis: passed; no live user manager claim is made.
 - Added strict request validation, queue/walk/journal bounds, terminal retention, recoverable uninstall, supported cross-filesystem mode/time preservation and duplicate-identity suppression.
+
+## 2026-09-01 — deterministic release-gate fixtures
+
+- `cargo test --workspace --locked`: passed, 31 unit tests plus doc tests.
+- `cargo clippy --workspace --all-targets --locked -- -D warnings`: passed.
+- Injected `EACCES` at the descriptor-relative no-replace rename boundary; the source remained byte-for-byte intact, no destination appeared and the daemon mapped the propagated failure to `filesystem_error`.
+- Seeded a real SQLite journal with 10,001 terminal entries plus one active proposal; retention removed exactly one oldest terminal row, retained 10,000 terminal rows and preserved active evidence.
