@@ -19,6 +19,8 @@ Authoritative paths at that commit:
 Validator blob: `00d751229d1c927aef8ca0c3843692984a254789`  
 Validator SHA-256: `f7507e5042eb970e3dc918bdf6bf251c7557443892a77e71a17d7019ddde72c8`
 
+The QML dynamic-text scanner is vendored byte-for-byte from `test/shell.d/qml-text-format-scan.py` at the same pinned Quattro commit. Its SHA-256 is `577ac771ca2ac171b108d49c48d4d33b01d9fe8887bdc1563d9190d480a4bcc4` and is checked before execution. This avoids executing mutable or freshly downloaded code during verification.
+
 There is no separate JSON Schema. Runtime loading plus the validator define the contract. The root `manifest.json` uses numeric `schemaVersion: 1`, supported unique kinds only, valid relative regular-file entry points and no symlinks outside `.git`.
 
 SortingHat uses `service` + `bar-widget`. The service owns a bounded non-overlapping status poll; the widget reads it through `bar.shell.serviceFor(moduleName)` and provides native panel/keyboard behavior. Dynamic strings use `Text.PlainText`. Commands are argv vectors, never shell strings.

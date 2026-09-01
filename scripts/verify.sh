@@ -25,14 +25,12 @@ printf '%s  %s\n' "$validator_sha256" "$work_dir/omarchy-plugin-validate" | sha2
 chmod 700 "$work_dir/omarchy-plugin-validate"
 "$work_dir/omarchy-plugin-validate" "$repo_root"
 
-curl --fail --silent --show-error --location \
-  "https://raw.githubusercontent.com/omacom/omarchy/$quattro_sha/test/shell.d/qml-text-format-scan.py" \
-  --output "$work_dir/qml-text-format-scan.py"
-printf '%s  %s\n' "$qml_scanner_sha256" "$work_dir/qml-text-format-scan.py" \
+qml_scanner="$repo_root/vendor/omarchy/qml-text-format-scan.py"
+printf '%s  %s\n' "$qml_scanner_sha256" "$qml_scanner" \
   | sha256sum --check --status
 mkdir -p "$work_dir/scan/shell"
 cp "$repo_root"/omarchy-plugin/*.qml "$work_dir/scan/shell/"
-python3 "$work_dir/qml-text-format-scan.py" "$work_dir/scan"
+python3 "$qml_scanner" "$work_dir/scan"
 
 if rg -n --hidden --glob '!Cargo.lock' --glob '!.git/**' \
   '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|gh[pousr]_[A-Za-z0-9_]{30,}|AKIA[0-9A-Z]{16})' .; then
