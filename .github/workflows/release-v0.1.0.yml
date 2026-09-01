@@ -1,0 +1,44 @@
+name: publish-v0.1.0
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/release-v0.1.0.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component clippy,rustfmt
+      - name: Install pinned dependency policy checker
+        run: cargo install cargo-deny --version 0.20.2 --locked
+      - name: Verify
+        env:
+          CARGO: cargo
+        run: ./scripts/verify.sh
+      - name: Package exact release commit
+        run: ./scripts/package-committed.sh "$GITHUB_SHA"
+      - name: Verify package checksum and provenance
+        run: |
+          cd dist
+          sha256sum --check sortinghat-0.1.0-x86_64-unknown-linux-gnu.tar.gz.sha256
+          package_root=$(mktemp -d)
+          tar -xzf sortinghat-0.1.0-x86_64-unknown-linux-gnu.tar.gz -C "$package_root"
+          test "$(sed -n '1p' "$package_root/sortinghat-0.1.0-x86_64-unknown-linux-gnu/SOURCE_COMMIT")" = "$GITHUB_SHA"
+      - name: Publish v0.1.0
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v0.1.0 \
+            --target "$GITHUB_SHA" \
+            --title "SortingHat v0.1.0" \
+            --notes-file docs/release-notes-v0.1.0.md \
+            dist/sortinghat-0.1.0-x86_64-unknown-linux-gnu.tar.gz \
+            dist/sortinghat-0.1.0-x86_64-unknown-linux-gnu.tar.gz.sha256
