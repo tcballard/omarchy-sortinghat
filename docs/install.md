@@ -1,6 +1,10 @@
 # Install and operate v0.1
 
-## Runtime
+## Release package
+
+The recommended installation is the checksum-verified prebuilt x86_64 package documented in the root [README](../README.md). Its installer records exact file provenance, refuses to overwrite modified or unowned paths, retains an owned-upgrade recovery copy and enables the hardened user service. Rust is not required for that path.
+
+## Build the runtime from source
 
 Build from a reviewed commit and install the two binaries plus the user unit:
 
@@ -17,7 +21,7 @@ The unit has no IP networking capability. State is private under `~/.local/state
 
 ## Omarchy plugin
 
-Add this repository using Omarchy's normal plugin flow and enable `tcballard.sortinghat`. Omarchy only installs QML, not the Rust runtime. Until the runtime is installed and running, the widget deliberately reports `runtime missing`.
+Add this repository using Omarchy's normal plugin flow and enable `io.github.tcballard.sortinghat`. Omarchy only installs QML, not the Rust runtime. Until the runtime is installed and running, the widget deliberately reports `runtime missing`.
 
 Select the first watched folder from the panel's **Watch folder** button. The same explicit selection is registered as an allowed destination root. No default folder is watched.
 
@@ -55,4 +59,6 @@ Re-read a proposal after any action: successful edits increment its revision and
 
 ## Uninstall
 
-`./scripts/uninstall-user.sh` disables the unit and moves installed program files into a timestamped recovery folder. It does not delete SortingHat state, watched files or the Omarchy plugin. Remove the plugin separately through Omarchy after review.
+Release-package users run `${XDG_DATA_HOME:-$HOME/.local/share}/sortinghat/uninstall-user.sh`. It verifies installed-file ownership, disables the unit and moves program files into a timestamped recovery folder. It does not delete SortingHat state, watched files or the Omarchy plugin. Remove the plugin separately through Omarchy after review.
+
+Source-build users may run `./scripts/uninstall-user.sh` only when the release installer provenance exists; otherwise remove their manually installed files themselves after reviewing each target.

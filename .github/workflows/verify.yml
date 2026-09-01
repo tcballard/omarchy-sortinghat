@@ -2,8 +2,9 @@ name: verify
 
 on:
   push:
-    branches: [feat/machine-independent-v0.1]
+    branches: [main, feat/machine-independent-v0.1]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
