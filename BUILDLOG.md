@@ -75,3 +75,7 @@ Append-only verification evidence for `feat/machine-independent-v0.1`.
 - Root README now directly documents requirements, checksum verification, installation and recoverable removal. Release and marketplace drafts preserve live-only claims as blocked.
 - Push CI packages and retains the exact committed candidate for 14 days so live acceptance can use the tested runtime without a local Rust toolchain.
 - The current marketplace Automated Security Baseline initially identified the pinned QML scanner as downloaded executable content. The exact upstream file is now vendored from the pinned Quattro commit and SHA-256 checked before execution, removing the network execution path; the accepted residual capabilities are installer and user-service management only.
+
+## 2026-09-22 — README front door
+
+Documentation for #10: centred HTML title, one Plugin badge and concise README; detailed usage retained in GUIDE.md. Existing section anchors retained. Local links, HTML title, badge count and git diff --check passed. Packaging shell syntax passed; the package file list includes GUIDE.md. Runtime tests were not rerun for this documentation change.

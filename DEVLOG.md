@@ -51,3 +51,7 @@ The two deterministic test gaps are now closed. Permission denial is injected at
 The release path no longer requires users to compile Rust. Exact-commit packaging produces a versioned x86_64 archive, checksum, provenance-aware installer and recoverable uninstaller. Installation refuses existing paths unless their hashes match SortingHat's prior provenance; removal likewise refuses modified or unowned files.
 
 Live Quickshell rendering, keyboard-only use, user-systemd activation, daemon/CLI IPC, genuine preview capture and unintended-network observation still require a real Omarchy Quattro session. No release or marketplace claim should cross that boundary until the capture is completed.
+
+## 2026-09-22 — README front door
+
+Applied the RSS Feed / Task Manager README approach for #10. Kept runtime prerequisites and owner-verified v0.1.0 installation status explicit, with full checksum and recovery instructions in GUIDE.md. Tom still needs to supply the review-queue screenshot; no fixture or generated image is presented as his capture. This docs-only work uses its own branch under the current request for separate PRs. No release or marketplace action.
