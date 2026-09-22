@@ -1,79 +1,48 @@
-# SortingHat for Omarchy
+<h1 align="center">SortingHat for Omarchy</h1>
 
-Review-first file organisation for Omarchy Quattro.
+<p align="center">
+  <a href="https://github.com/tcballard/omarchy-badges"><img src="https://raw.githubusercontent.com/tcballard/omarchy-badges/75975e5b5bf75e7ede3764bcd2950046f7abfe2c/badges/v1/omarchy-plugin.svg" alt="Built for Omarchy: Plugin" height="24"></a>
+</p>
 
-SortingHat watches only folders you explicitly select. Deterministic rules propose where completed files should go; ambiguous files remain in a review queue and may use an optional metadata-only agent after opt-in. Nothing moves until you approve it, destinations are explained, collisions never overwrite, and completed moves are journalled for recovery and undo.
+**Put files in their place, with the final say.**
 
-The native Rust service does the filesystem work. The Omarchy QML service and bar widget are deliberately thin. SortingHat complements the existing file manager; it does not replace Nautilus or become a general document-management system.
+SortingHat watches folders you choose and proposes where completed files should go. Review the destination and reason, approve a move, or leave the file where it is. Nothing moves automatically.
 
-## Safety and privacy
+## Everyday use
 
-- No folder is watched until you select it.
-- Rules and agents create proposals; they cannot move files automatically.
-- Moves never overwrite or silently merge directories.
-- Interrupted operations recover from recorded filesystem evidence instead of guessing.
-- Deterministic organisation works offline.
-- The optional agent is disabled by default and receives bounded metadata only.
-- v0.1 has no file-content permission, telemetry or core IP networking.
-
-See [the privacy boundary](docs/privacy.md) and [the architecture decision](docs/adr/0001-safety-architecture.md) for the full contract.
-
-## Status
-
-Version 0.1.0 is the first public release. The complete machine-independent verification suite passes, and the packaged install has been owner-verified on Omarchy Quattro. A detailed live acceptance capture is documented separately and is not claimed as automated CI evidence.
+Open the panel and choose **Watch folder**. Rules suggest destinations for completed files; ambiguous items stay in the review queue. Approved moves are recorded for recovery and undo, and collisions never overwrite an existing file.
 
 ## Install
 
-Requirements: Omarchy Quattro on x86_64 Linux, a user systemd manager, and `curl`, `tar` and `sha256sum`. The release runtime is prebuilt; Rust is not required.
+Omarchy Quattro on x86_64 Linux, a systemd user session, curl, tar and sha256sum. The release runtime is prebuilt; Rust is not required.
 
-Install the reviewed v0.1.0 runtime package:
-
-```bash
-version=0.1.0
-asset="sortinghat-${version}-x86_64-unknown-linux-gnu.tar.gz"
-base="https://github.com/tcballard/omarchy-sortinghat/releases/download/v${version}"
-work_dir=$(mktemp -d)
-curl --fail --location --output "$work_dir/$asset" "$base/$asset"
-curl --fail --location --output "$work_dir/$asset.sha256" "$base/$asset.sha256"
-(cd "$work_dir" && sha256sum --check "$asset.sha256")
-tar -xzf "$work_dir/$asset" -C "$work_dir"
-"$work_dir/${asset%.tar.gz}/install.sh"
-```
-
-The installer records exact file hashes, refuses to overwrite an unowned or modified runtime, and retains a recovery copy during an owned upgrade.
-
-Then add and enable the plugin through Omarchy:
+Install the checksum-verified runtime using the [v0.1.0 installation steps](GUIDE.md#install), then add the plugin:
 
 ```bash
 omarchy plugin add https://github.com/tcballard/omarchy-sortinghat
 ```
 
-Enable `io.github.tcballard.sortinghat` and add its bar widget. Until the runtime is installed and healthy, the widget deliberately reports `runtime missing`.
+Enable **SortingHat** and add its bar widget. The native runtime is required before the plugin can work.
 
-Open the panel and choose **Watch folder** to enrol the first watched and destination root. SortingHat never assumes `~/Downloads` or any other default folder.
+## Update and remove
 
-For source builds and CLI operation, see [docs/install.md](docs/install.md).
+This plugin also has a native runtime. Follow the [runtime and plugin instructions](GUIDE.md#remove) when updating or removing it. The shell plugin can be removed with `omarchy plugin remove io.github.tcballard.sortinghat`.
 
-## Remove
+## A few useful details
 
-Remove the runtime with:
+**v0.1.0.** The packaged install was owner-verified on Omarchy Quattro. Detailed live acceptance is recorded separately in the [acceptance guide](docs/live-acceptance.md).
 
-```bash
-"${XDG_DATA_HOME:-$HOME/.local/share}/sortinghat/uninstall-user.sh"
-```
+Deterministic rules work offline. The optional agent is off by default and receives bounded metadata after opt-in. [Privacy](docs/privacy.md) · [Source builds](docs/install.md)
 
-The uninstaller verifies ownership, disables the user service and moves installed program files into a timestamped recovery folder. It preserves SortingHat state and every watched file. Review that backup, then remove the plugin separately through Omarchy.
+[Usage and development guide](GUIDE.md) · [Report a bug](https://github.com/tcballard/omarchy-sortinghat/issues)
 
-## Verification
+[Licence licensed](LICENSE).
 
-```bash
-./scripts/verify.sh
-```
+<!-- Preserve links to sections now in the guide. -->
+<a id="license"></a>
+<a id="remove"></a>
+<a id="safety-and-privacy"></a>
+<a id="status"></a>
+<a id="verification"></a>
 
-The gate includes formatting, Clippy with warnings denied, the complete Rust test suite, dependency/advisory/licence policy, installer ownership tests, the pinned upstream Omarchy validator, the upstream dynamic-text scan, systemd hardening analysis and a bounded secret-pattern scan.
-
-Live acceptance is intentionally separate and documented in [docs/live-acceptance.md](docs/live-acceptance.md).
-
-## License
-
-Apache-2.0. External Rust dependencies and their accepted licences are locked and checked by `cargo-deny`.
+[Looking for the previous detailed sections? Open the full guide →](GUIDE.md)

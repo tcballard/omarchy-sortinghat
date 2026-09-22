@@ -26,7 +26,7 @@ cp -R omarchy-plugin "$package_dir/plugin/"
 install -m644 packaging/systemd/sortinghat.service "$package_dir/systemd/"
 install -m755 scripts/install-package.sh "$package_dir/install.sh"
 install -m755 scripts/uninstall-user.sh "$package_dir/uninstall-user.sh"
-install -m644 README.md LICENSE docs/install.md docs/privacy.md "$package_dir/"
+install -m644 README.md GUIDE.md LICENSE docs/install.md docs/privacy.md "$package_dir/"
 printf '%s\n' "$commit_sha" > "$package_dir/SOURCE_COMMIT"
 
 mkdir -p "$repo_root/dist"
